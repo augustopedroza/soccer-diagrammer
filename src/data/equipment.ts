@@ -25,13 +25,13 @@ export const EQUIPMENT: EquipmentSpec[] = [
   { id: 'ball', label: 'Ball', group: 'Other', w: 26, h: 26 },
   { id: 'cap', label: 'Cap', group: 'Other', w: 30, h: 18 },
   { id: 'cone', label: 'Cone', group: 'Other', w: 28, h: 30 },
-  { id: 'dummy', label: 'Dummy', group: 'Other', w: 30, h: 54 },
+  { id: 'dummy', label: 'Dummy', group: 'Other', w: 32, h: 54 },
   { id: 'ladder', label: 'Ladder', group: 'Other', w: 110, h: 26 },
-  { id: 'pole', label: 'Pole', group: 'Other', w: 10, h: 60 },
+  { id: 'pole', label: 'Pole', group: 'Other', w: 18, h: 62 },
   { id: 'ring', label: 'Ring', group: 'Other', w: 40, h: 24 },
   { id: 'mat', label: 'Mat', group: 'Other', w: 56, h: 34 },
   { id: 'flag', label: 'Flag', group: 'Other', w: 34, h: 52 },
-  { id: 'bench', label: 'Bench', group: 'Other', w: 90, h: 22 },
+  { id: 'bench', label: 'Bench', group: 'Other', w: 90, h: 26 },
 ];
 
 export const equipmentSpec = (id: string): EquipmentSpec | undefined =>

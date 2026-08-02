@@ -218,24 +218,44 @@ export function KitMark({
           </>
         );
       }
-      case 'inside-goal':
+      case 'inside-goal': {
+        // A small goal set inside the field, seen face on.
+        const gy = h / 2 - 3;
         return (
           <>
-            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={2} fill="#fff" fillOpacity={0.5} stroke={stroke} strokeWidth={2} />
-            {Array.from({ length: 6 }, (_, i) => (
-              <line key={i} x1={-w / 2 + ((i + 1) * w) / 7} y1={-h / 2} x2={-w / 2 + ((i + 1) * w) / 7} y2={h / 2} stroke={stroke} strokeWidth={0.7} strokeOpacity={0.5} />
+            <rect x={-w / 2} y={-h / 2} width={w} height={gy + h / 2} fill="#fff" fillOpacity={0.45} />
+            {Array.from({ length: 8 }, (_, i) => (
+              <line key={`v${i}`} x1={-w / 2 + ((i + 1) * w) / 9} y1={-h / 2} x2={-w / 2 + ((i + 1) * w) / 9} y2={gy}
+                stroke={stroke} strokeWidth={0.5} strokeOpacity={0.5} />
             ))}
-            <line x1={-w / 2} y1={h / 2} x2={w / 2} y2={h / 2} stroke={stroke} strokeWidth={2.6} />
+            {[0.34, 0.68].map((t) => (
+              <line key={t} x1={-w / 2} y1={-h / 2 + (gy + h / 2) * t} x2={w / 2} y2={-h / 2 + (gy + h / 2) * t}
+                stroke={stroke} strokeWidth={0.5} strokeOpacity={0.5} />
+            ))}
+            <path d={`M${-w / 2},${gy} L${-w / 2},${-h / 2} L${w / 2},${-h / 2} L${w / 2},${gy}`}
+              fill="none" stroke={stroke} strokeWidth={2} strokeLinejoin="round" />
+            <line x1={-w / 2} y1={gy} x2={w / 2} y2={gy} stroke={stroke} strokeWidth={1.4} />
           </>
         );
+      }
       case 'goal-toppled':
-      case 'mini-goal-toppled':
+      case 'mini-goal-toppled': {
+        // Flat on the grass: the frame from above with the net spread behind it.
+        const barY = -h / 2 + 2;
         return (
           <>
-            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={3} fill="#e6eaef" stroke={stroke} strokeWidth={2} />
-            <line x1={-w / 2 + 4} y1={0} x2={w / 2 - 4} y2={0} stroke={stroke} strokeWidth={1} strokeOpacity={0.45} strokeDasharray="4 3" />
+            <rect x={-w / 2} y={barY} width={w} height={h - 4} fill="#fff" fillOpacity={0.32}
+              stroke={stroke} strokeWidth={1} strokeDasharray="3 2" />
+            {Array.from({ length: 7 }, (_, i) => (
+              <line key={i} x1={-w / 2 + ((i + 1) * w) / 8} y1={barY} x2={-w / 2 + ((i + 1) * w) / 8} y2={h / 2 - 2}
+                stroke={stroke} strokeWidth={0.5} strokeOpacity={0.45} />
+            ))}
+            {/* The crossbar, now lying along the near edge. */}
+            <line x1={-w / 2} y1={barY} x2={w / 2} y2={barY} stroke={stroke} strokeWidth={3.2} strokeLinecap="round" />
+            <line x1={-w / 2} y1={barY} x2={w / 2} y2={barY} stroke="#e8ecf1" strokeWidth={1.6} strokeLinecap="round" />
           </>
         );
+      }
       case 'ball': {
         // A truncated icosahedron read from above: one black pentagon at the
         // centre, five more cut off by the rim, joined by the seams between.
@@ -287,10 +307,12 @@ export function KitMark({
         );
       }
       case 'cap':
+        // A flat disc marker: a low dome sitting on a wider rim.
         return (
           <>
-            <ellipse rx={w / 2} ry={h / 2} fill={orange} stroke={stroke} strokeWidth={1.4} />
-            <ellipse rx={w / 2 - 4} ry={h / 2 - 3} fill="#fff" fillOpacity={0.28} />
+            <ellipse cy={1} rx={w / 2} ry={h / 2} fill="#c25c12" />
+            <ellipse rx={w / 2} ry={h / 2} fill={orange} stroke={stroke} strokeWidth={1.1} />
+            <ellipse cy={-1} rx={w / 2 - 5} ry={h / 2 - 4} fill="#fff" fillOpacity={0.3} />
           </>
         );
       case 'cone': {
@@ -333,65 +355,125 @@ export function KitMark({
           </>
         );
       }
-      case 'dummy':
+      case 'dummy': {
+        // A free-kick mannequin: head, tapered body, weighted base.
+        const baseY = h / 2 - 4;
         return (
           <>
-            <ellipse cy={h / 2 - 2} rx={w / 2} ry={4} fill="#2c2f36" fillOpacity={0.35} />
-            <path d={`M0,${-h / 2} a7.5,7.5 0 0 1 0,15 l${w * 0.28},${h * 0.5} a4,4 0 0 1 -4,4 l${-w * 0.56},0 a4,4 0 0 1 -4,-4 Z`} fill={orange} stroke={stroke} strokeWidth={1.3} strokeLinejoin="round" />
+            <ellipse cy={baseY + 2} rx={w * 0.46} ry={3} fill="#1d232b" fillOpacity={0.28} />
+            <path
+              d={`M0,${-h / 2 + 11}
+                  C ${w * 0.2},${-h / 2 + 13} ${w * 0.3},${h * 0.1} ${w * 0.34},${baseY}
+                  L ${-w * 0.34},${baseY}
+                  C ${-w * 0.3},${h * 0.1} ${-w * 0.2},${-h / 2 + 13} 0,${-h / 2 + 11} Z`}
+              fill={orange}
+              stroke={stroke}
+              strokeWidth={1.1}
+              strokeLinejoin="round"
+            />
+            <circle cy={-h / 2 + 7} r={6} fill={orange} stroke={stroke} strokeWidth={1.1} />
+            <rect x={-w * 0.46} y={baseY} width={w * 0.92} height={4} rx={2} fill="#2a3038" />
           </>
         );
-      case 'ladder':
+      }
+      case 'ladder': {
+        // An agility ladder lies flat, so it is drawn from above: two rails and
+        // the rungs between them.
+        const rungs = 7;
         return (
           <>
-            <line x1={-w / 2} y1={-h / 2 + 2} x2={w / 2} y2={-h / 2 + 2} stroke={orange} strokeWidth={2.6} />
-            <line x1={-w / 2} y1={h / 2 - 2} x2={w / 2} y2={h / 2 - 2} stroke={orange} strokeWidth={2.6} />
-            {Array.from({ length: 8 }, (_, i) => (
-              <line key={i} x1={-w / 2 + (i * w) / 7} y1={-h / 2 + 2} x2={-w / 2 + (i * w) / 7} y2={h / 2 - 2} stroke={orange} strokeWidth={2.2} />
+            {Array.from({ length: rungs }, (_, i) => {
+              const x = -w / 2 + (w * (i + 1)) / (rungs + 1);
+              return (
+                <line key={i} x1={x} y1={-h / 2 + 1} x2={x} y2={h / 2 - 1}
+                  stroke="#f2c14e" strokeWidth={2.4} strokeLinecap="round" />
+              );
+            })}
+            {[-h / 2 + 1, h / 2 - 1].map((y) => (
+              <line key={y} x1={-w / 2} y1={y} x2={w / 2} y2={y}
+                stroke="#e0a828" strokeWidth={2.8} strokeLinecap="round" />
             ))}
           </>
         );
-      case 'pole':
+      }
+      case 'pole': {
+        // A slalom pole standing in its base.
+        const baseY = h / 2 - 3;
+        const bands = 4;
         return (
           <>
-            <ellipse cy={h / 2 - 2} rx={9} ry={4} fill="#2c2f36" fillOpacity={0.3} />
-            <rect x={-w / 2} y={-h / 2} width={w} height={h - 3} rx={5} fill="#dfe4ea" stroke={stroke} strokeWidth={1.3} />
-            {[0.25, 0.55, 0.85].map((t) => (
-              <rect key={t} x={-w / 2} y={-h / 2 + (h - 3) * t} width={w} height={(h - 3) * 0.12} fill={orange} />
+            <ellipse cy={baseY + 1} rx={w * 0.55} ry={2.6} fill="#1d232b" fillOpacity={0.25} />
+            <rect x={-2} y={-h / 2} width={4} height={baseY + h / 2} rx={2} fill="#eceff3"
+              stroke={stroke} strokeWidth={0.9} />
+            {Array.from({ length: bands }, (_, i) => (
+              <rect key={i} x={-2} y={-h / 2 + ((i * 2 + 1) * (baseY + h / 2)) / (bands * 2)}
+                width={4} height={(baseY + h / 2) / (bands * 2)} fill={orange} />
             ))}
+            <ellipse cy={baseY} rx={w * 0.5} ry={2.6} fill="#2a3038" />
           </>
         );
-      case 'ring':
+      }
+      case 'ring': {
+        // A flat agility ring on the grass.
         return (
           <>
-            <ellipse rx={w / 2} ry={h / 2} fill="none" stroke={orange} strokeWidth={4} />
-            <ellipse rx={w / 2} ry={h / 2} fill="none" stroke="#fff" strokeOpacity={0.35} strokeWidth={1.4} />
+            <ellipse rx={w / 2} ry={h / 2} fill="none" stroke="#1d232b" strokeWidth={5} strokeOpacity={0.18} />
+            <ellipse rx={w / 2} ry={h / 2} fill="none" stroke={orange} strokeWidth={3.4} />
+            <ellipse rx={w / 2} ry={h / 2} fill="none" stroke="#fff" strokeOpacity={0.4} strokeWidth={1.1} />
           </>
         );
+      }
       case 'mat':
         return (
           <>
-            <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={4} fill="#1f6fb2" stroke={stroke} strokeWidth={1.4} />
-            <rect x={-w / 2 + 4} y={-h / 2 + 4} width={w - 8} height={h - 8} rx={2} fill="none" stroke="#fff" strokeOpacity={0.4} strokeWidth={1.2} />
+            <rect x={-w / 2} y={-h / 2 + 2} width={w} height={h - 2} rx={4} fill="#155a91" />
+            <rect x={-w / 2} y={-h / 2} width={w} height={h - 3} rx={4} fill="#2a80c4"
+              stroke={stroke} strokeWidth={1} />
+            <rect x={-w / 2 + 5} y={-h / 2 + 4} width={w - 10} height={h - 11} rx={2}
+              fill="none" stroke="#fff" strokeOpacity={0.35} strokeWidth={1} />
           </>
         );
-      case 'flag':
+      case 'flag': {
+        // A corner flag: pole, pennant with a fold, weighted foot.
+        const poleX = -w / 2 + 5;
+        const footY = h / 2 - 2;
         return (
           <>
-            <ellipse cy={h / 2 - 2} rx={7} ry={3.5} fill="#2c2f36" fillOpacity={0.3} />
-            <line x1={-w / 2 + 4} y1={-h / 2} x2={-w / 2 + 4} y2={h / 2 - 2} stroke="#8a9099" strokeWidth={2.6} strokeLinecap="round" />
-            <path d={`M${-w / 2 + 5},${-h / 2 + 1} L${w / 2 - 1},${-h / 2 + 9} L${-w / 2 + 5},${-h / 2 + 17} Z`} fill={orange} stroke={stroke} strokeWidth={1} strokeLinejoin="round" />
+            <ellipse cx={poleX} cy={footY + 1} rx={7} ry={2.6} fill="#1d232b" fillOpacity={0.25} />
+            <line x1={poleX} y1={-h / 2} x2={poleX} y2={footY} stroke="#c9ced6" strokeWidth={2.4}
+              strokeLinecap="round" />
+            <path
+              d={`M${poleX + 1},${-h / 2 + 1}
+                  L ${w / 2},${-h / 2 + 8}
+                  Q ${poleX + (w / 2 - poleX) * 0.55},${-h / 2 + 11} ${poleX + 1},${-h / 2 + 17} Z`}
+              fill={orange}
+              stroke={stroke}
+              strokeWidth={0.9}
+              strokeLinejoin="round"
+            />
+            <ellipse cx={poleX} cy={footY} rx={6} ry={2.6} fill="#2a3038" />
           </>
         );
-      case 'bench':
+      }
+      case 'bench': {
+        // A touchline bench from the side: seat, legs, a little shadow.
+        const seatY = -h / 2 + 4;
+        const seatH = h * 0.3;
         return (
           <>
-            <rect x={-w / 2} y={-h / 2} width={w} height={h * 0.5} rx={2.5} fill="#d0a05a" stroke={stroke} strokeWidth={1.3} />
-            <line x1={-w / 2 + 3} y1={-h / 2 + h * 0.25} x2={w / 2 - 3} y2={-h / 2 + h * 0.25} stroke={stroke} strokeOpacity={0.3} strokeWidth={1} />
+            <rect x={-w / 2 + 3} y={h / 2 - 2} width={w - 6} height={2.5} rx={1.2}
+              fill="#1d232b" fillOpacity={0.22} />
             {[-1, 1].map((sx) => (
-              <line key={sx} x1={sx * (w / 2 - 9)} y1={0} x2={sx * (w / 2 - 9)} y2={h / 2} stroke="#8a9099" strokeWidth={2.6} strokeLinecap="round" />
+              <rect key={sx} x={sx * (w / 2 - 12) - 1.6} y={seatY + seatH} width={3.2}
+                height={h / 2 - seatY - seatH - 1} rx={1.4} fill="#8a9099" />
             ))}
+            <rect x={-w / 2} y={seatY} width={w} height={seatH} rx={2.5} fill="#d8ab63"
+              stroke={stroke} strokeWidth={1} />
+            <line x1={-w / 2 + 3} y1={seatY + seatH * 0.55} x2={w / 2 - 3} y2={seatY + seatH * 0.55}
+              stroke={stroke} strokeOpacity={0.22} strokeWidth={0.9} />
           </>
         );
+      }
       default:
         return <circle r={Math.min(w, h) / 2} fill={orange} stroke={stroke} strokeWidth={1.4} />;
     }
