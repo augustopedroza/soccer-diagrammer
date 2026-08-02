@@ -11,6 +11,8 @@ import type { LineType, Team } from '../types/diagram';
 
 export interface LineSpec {
   type: LineType;
+  /** Keyboard shortcut — the first letter of what the line stands for. */
+  key: string;
   /** What the coach is drawing. The stroke follows from this, not the reverse. */
   label: string;
   /** One line of help, shown in the palette and the legend. */
@@ -25,12 +27,14 @@ export interface LineSpec {
 export const LINE_SPECS: LineSpec[] = [
   {
     type: 'pass',
+    key: 'p',
     label: 'Pass or shot',
     meaning: 'Solid line. Its length is the distance; the arrow head is where the ball ends up.',
     stroke: '#111418',
   },
   {
     type: 'dribble',
+    key: 'd',
     label: 'Dribble',
     meaning: 'Wavy line. A player travelling with the ball at their feet.',
     stroke: '#111418',
@@ -38,6 +42,7 @@ export const LINE_SPECS: LineSpec[] = [
   },
   {
     type: 'run',
+    key: 'r',
     label: 'Run off the ball',
     meaning: 'Dashed line. Player movement without the ball.',
     stroke: '#111418',
@@ -45,6 +50,7 @@ export const LINE_SPECS: LineSpec[] = [
   },
   {
     type: 'tactical',
+    key: 't',
     label: 'Tactical arrow',
     meaning: "Solid red line. A player's area of influence, with or without the ball.",
     stroke: '#d21f3c',

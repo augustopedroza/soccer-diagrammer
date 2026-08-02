@@ -78,6 +78,24 @@ export default function App() {
         setTool({ kind: 'select' });
         setSelected(new Set());
       }
+      if (e.key.toLowerCase() === 'v') setTool({ kind: 'select' });
+      // First letter of what the line stands for. With lines selected this
+      // retypes them, which is the same verb applied to what is in hand.
+      const spec = LINE_SPECS.find((sp) => sp.key === e.key.toLowerCase());
+      if (spec && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const lines = diagram.shapes.filter((sh) => sh.k === 'line' && selected.has(sh.id));
+        if (lines.length > 0) {
+          commitNow({
+            ...diagram,
+            shapes: diagram.shapes.map((sh) =>
+              sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: spec.type } : sh,
+            ),
+          });
+        } else {
+          setTool({ kind: 'line', type: spec.type });
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -162,6 +180,47 @@ export default function App() {
 
       <div className="work">
         <aside className="palette">
+          {selectedLines.length > 0 && (
+            <section>
+              <h2>
+                {selectedLines.length > 1
+                  ? `${selectedLines.length} lines selected`
+                  : 'Selected line'}
+              </h2>
+              <p className="hint">Change what it means — the stroke follows.</p>
+              {LINE_SPECS.map((sp) => {
+                const all = selectedLines.every((l) => l.type === sp.type);
+                return (
+                  <button
+                    key={sp.type}
+                    className={`lineBtn${all ? ' on' : ''}`}
+                    onClick={() =>
+                      commitNow({
+                        ...diagram,
+                        shapes: diagram.shapes.map((sh) =>
+                          sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: sp.type } : sh,
+                        ),
+                      })
+                    }
+                  >
+                    <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
+                      <path
+                        d={sp.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
+                        fill="none"
+                        stroke={sp.stroke}
+                        strokeWidth={2}
+                        strokeDasharray={sp.dash ? '7 5' : undefined}
+                      />
+                      <path d="M0,0 L-8,-4 L-8,4 Z" fill={sp.stroke} transform="translate(56 8)" />
+                    </svg>
+                    <span>{sp.label}</span>
+                    <kbd className="lineKey">{sp.key.toUpperCase()}</kbd>
+                  </button>
+                );
+              })}
+            </section>
+          )}
+
           <section>
             <h2>Surface</h2>
             <div className="segmented">
@@ -233,69 +292,33 @@ export default function App() {
                 <div className="teamName">
                   {t.label} <span>{t.hint}</span>
                 </div>
-                {NUMBER_GROUPS.map((g) => (
-                  <div className="numRow" key={g.name}>
-                    {g.numbers.map((n) => (
+                <div className="numRow">
+                  {NUMBER_GROUPS.flatMap((g) =>
+                    g.numbers.map((n) => (
                       <button
                         key={n}
                         className={`numBtn${isTool({ kind: 'player', team: t.team, number: n }) ? ' on' : ''}`}
                         title={`${t.label} — ${g.name} ${n}`}
                         onClick={() => setTool({ kind: 'player', team: t.team, number: n })}
                       >
-                        <svg viewBox="-32 -37 64 56" width="46" height="40" aria-hidden="true">
+                        <svg viewBox="-32 -37 64 62" width="42" height="41" aria-hidden="true">
                           <PlayerToken team={t.team} number={n} x={0} y={0} colors={diagram.colors} />
                         </svg>
                       </button>
-                    ))}
-                  </div>
-                ))}
+                    )),
+                  )}
+                </div>
               </div>
             ))}
           </section>
 
-          {selectedLines.length > 0 && (
-            <section>
-              <h2>
-                {selectedLines.length > 1
-                  ? `${selectedLines.length} lines selected`
-                  : 'Selected line'}
-              </h2>
-              <p className="hint">Change what it means — the stroke follows.</p>
-              {LINE_SPECS.map((sp) => {
-                const all = selectedLines.every((l) => l.type === sp.type);
-                return (
-                  <button
-                    key={sp.type}
-                    className={`lineBtn${all ? ' on' : ''}`}
-                    onClick={() =>
-                      commitNow({
-                        ...diagram,
-                        shapes: diagram.shapes.map((sh) =>
-                          sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: sp.type } : sh,
-                        ),
-                      })
-                    }
-                  >
-                    <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
-                      <path
-                        d={sp.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
-                        fill="none"
-                        stroke={sp.stroke}
-                        strokeWidth={2}
-                        strokeDasharray={sp.dash ? '7 5' : undefined}
-                      />
-                      <path d="M0,0 L-8,-4 L-8,4 Z" fill={sp.stroke} transform="translate(56 8)" />
-                    </svg>
-                    <span>{sp.label}</span>
-                  </button>
-                );
-              })}
-            </section>
-          )}
-
           <section>
             <h2>Lines</h2>
-            <p className="hint">Drag from where it starts to where it ends. Hold Shift to curve.</p>
+            <p className="hint">
+              Drag from where it starts to where it ends. Hold Shift to curve. Press
+              the letter to pick a line, or to retype whatever is selected. V returns
+              to select.
+            </p>
             {LINE_SPECS.map((s) => (
               <button
                 key={s.type}
@@ -314,24 +337,9 @@ export default function App() {
                   <path d="M0,0 L-8,-4 L-8,4 Z" fill={s.stroke} transform="translate(56 8)" />
                 </svg>
                 <span>{s.label}</span>
+                <kbd className="lineKey">{s.key.toUpperCase()}</kbd>
               </button>
             ))}
-          </section>
-
-          <section>
-            <h2>Equipment</h2>
-            <div className="kitGrid">
-              {EQUIPMENT.map((e) => (
-                <button
-                  key={e.id}
-                  className={`kitBtn${isTool({ kind: 'kit', item: e.id }) ? ' on' : ''}`}
-                  onClick={() => setTool({ kind: 'kit', item: e.id })}
-                  title={e.label}
-                >
-                  {e.label}
-                </button>
-              ))}
-            </div>
           </section>
 
           <section>
@@ -382,6 +390,25 @@ export default function App() {
             onToolUsed={() => setTool({ kind: 'select' })}
           />
         </main>
+
+        <aside className="palette kitRail">
+          <section>
+            <h2>Equipment</h2>
+            <div className="kitGrid">
+              {EQUIPMENT.map((e) => (
+                <button
+                  key={e.id}
+                  className={`kitBtn${isTool({ kind: 'kit', item: e.id }) ? ' on' : ''}`}
+                  onClick={() => setTool({ kind: 'kit', item: e.id })}
+                  title={e.label}
+                >
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+        </aside>
       </div>
 
       <footer className="foot">
