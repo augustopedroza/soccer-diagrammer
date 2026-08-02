@@ -167,7 +167,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
 
   .printTitle { display: block !important; }
-  .handle, .handleBend, .selRing, .marquee, .snapRing { display: none !important; }
+  .handle, .handleBend, .selRing, .marquee, .snapRing, .chrome { display: none !important; }
 }
 
 /* Only ever seen on paper. */
@@ -196,6 +196,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 7px 10px; font-size: 12px; margin-bottom: 5px;
 }
 .tmplBtn:hover { border-color: var(--accent); background: #eaf0f6; }
+
+/* Selection chrome for tokens. */
+.chromeBox { fill: none; stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
+.chromeCorner { fill: #2f80ed; stroke: #fff; stroke-width: 1.5; }
+.chromeArm { stroke: #2f80ed; stroke-width: 2; }
+.chromeKnob { fill: #fff; stroke: #2f80ed; stroke-width: 2.2; cursor: grab; }
+.chromeKnobIcon { fill: none; stroke: #2f80ed; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.chromeKnobArrow { fill: #2f80ed; pointer-events: none; }
+.chrome { pointer-events: none; }
+.chrome .chromeKnob { pointer-events: auto; }
 
 .handle { fill: #fff; stroke: #2f80ed; stroke-width: 2.5; cursor: grab; }
 .handleBend { fill: #2f80ed; stroke: #fff; }

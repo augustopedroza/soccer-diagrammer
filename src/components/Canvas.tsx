@@ -27,7 +27,7 @@ export type Tool =
   | { kind: 'text' };
 
 interface Drag {
-  mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend';
+  mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend' | 'rotate';
   start: Point;
   now: Point;
   shift: boolean;
@@ -36,7 +36,18 @@ interface Drag {
   /** For endpoint and bend drags: which line, and which end of it. */
   lineId?: string;
   end?: 'from' | 'to';
+  /** For a rotate drag: the pointer angle it started at, and the angles then. */
+  fromAngle?: number;
+  rotWas?: Record<string, number>;
 }
+
+/** Half-size of the selection box around a shape, in surface units. */
+const CHROME_PAD = 6;
+/** How far above the box the rotate handle floats. */
+const ROTATE_ARM = 26;
+
+const angleAt = (cx: number, cy: number, p: Point) =>
+  (Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI;
 
 /** How close a click has to be to a handle to grab it. */
 const HANDLE_GRAB = 16;
@@ -59,6 +70,19 @@ function bendFromPath(path: Point[], a: Point, b: Point): number {
     if (Math.abs(d) > Math.abs(best)) best = d;
   }
   return best;
+}
+
+/** The box drawn around a selected token, and used to place its rotate knob. */
+function chromeBox(
+  sh: { k: string; item?: string },
+  kitSize: (id: string) => Point,
+): { w: number; h: number } {
+  if (sh.k === 'kit' && sh.item) {
+    const { x: w, y: h } = kitSize(sh.item);
+    return { w: w + CHROME_PAD * 2, h: h + CHROME_PAD * 2 };
+  }
+  // A player triangle is a little taller than it is wide.
+  return { w: 60 + CHROME_PAD, h: 64 + CHROME_PAD };
 }
 
 export function Canvas({
@@ -127,6 +151,31 @@ export function Canvas({
       return;
     }
 
+    // The rotate handle floats above a selected token and sits on top of
+    // everything, so it is tested first.
+    for (const sh of diagram.shapes) {
+      if (!selected.has(sh.id) || (sh.k !== 'player' && sh.k !== 'kit')) continue;
+      const b = chromeBox(sh, kitSize);
+      const knob = { x: sh.x, y: sh.y - b.h / 2 - ROTATE_ARM };
+      if (dist(p, knob) <= HANDLE_GRAB) {
+        const rotWas: Record<string, number> = {};
+        for (const t of diagram.shapes) {
+          if (selected.has(t.id) && (t.k === 'player' || t.k === 'kit')) rotWas[t.id] = t.rot;
+        }
+        setDrag({
+          mode: 'rotate',
+          start: p,
+          now: p,
+          shift: e.shiftKey,
+          path: [p],
+          lineId: sh.id,
+          fromAngle: angleAt(sh.x, sh.y, p),
+          rotWas,
+        });
+        return;
+      }
+    }
+
     // Handles on a selected line come first: they sit on top and are the whole
     // point of having selected it.
     for (const l of diagram.shapes) {
@@ -178,6 +227,28 @@ export function Canvas({
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!drag) return;
     const p = toSurface(e);
+
+    if (drag.mode === 'rotate' && drag.lineId && drag.rotWas && drag.fromAngle !== undefined) {
+      const pivot = diagram.shapes.find((sh) => sh.id === drag.lineId);
+      if (pivot && (pivot.k === 'player' || pivot.k === 'kit')) {
+        const delta = angleAt(pivot.x, pivot.y, p) - drag.fromAngle;
+        onChange(
+          {
+            ...diagram,
+            shapes: diagram.shapes.map((sh) => {
+              if (!(sh.k === 'player' || sh.k === 'kit')) return sh;
+              const was = drag.rotWas?.[sh.id];
+              if (was === undefined) return sh;
+              // Shift snaps to 15 degrees, the way most editors do.
+              const raw = was + delta;
+              const snapped = e.shiftKey ? Math.round(raw / 15) * 15 : raw;
+              return { ...sh, rot: ((snapped % 360) + 360) % 360 };
+            }),
+          },
+          false,
+        );
+      }
+    }
 
     if (drag.mode === 'endpoint' && drag.lineId) {
       onChange(
@@ -298,6 +369,7 @@ export function Canvas({
       );
     }
 
+    if (drag.mode === 'rotate') onChange(diagram, true);
     if (drag.mode === 'bend') onChange(diagram, true);
     if (drag.mode === 'move') onChange(diagram, true);
     setDrag(null);
@@ -398,9 +470,9 @@ export function Canvas({
       )}
       {rest.map((s) =>
         s.k === 'player' ? (
-          <PlayerMark key={s.id} shape={s} selected={selected.has(s.id)} colors={diagram.colors} />
+          <PlayerMark key={s.id} shape={s} colors={diagram.colors} />
         ) : s.k === 'kit' ? (
-          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} rot={s.rot} selected={selected.has(s.id)} />
+          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} rot={s.rot} />
         ) : s.k === 'text' ? (
           <TextMark key={s.id} shape={s} selected={selected.has(s.id)} />
         ) : null,
@@ -414,7 +486,42 @@ export function Canvas({
         />
       )}
       {preview}
-      {/* Handles last, so they sit above every stroke and token. */}
+      {/* Selection chrome for tokens: a box, corner marks and the rotate knob
+          above it. Rotating from the drawing itself keeps the gesture where the
+          object is rather than in a panel across the screen. */}
+      {diagram.shapes.map((sh) => {
+        if (!selected.has(sh.id) || (sh.k !== 'player' && sh.k !== 'kit')) return null;
+        const b = chromeBox(sh, kitSize);
+        const x = sh.x - b.w / 2;
+        const y = sh.y - b.h / 2;
+        const knobY = y - ROTATE_ARM;
+        return (
+          <g key={`c${sh.id}`} className="chrome">
+            <rect x={x} y={y} width={b.w} height={b.h} className="chromeBox" />
+            {[
+              [x, y],
+              [x + b.w, y],
+              [x, y + b.h],
+              [x + b.w, y + b.h],
+            ].map(([hx, hy], i) => (
+              <rect key={i} x={hx - 4} y={hy - 4} width={8} height={8} className="chromeCorner" />
+            ))}
+            <line x1={sh.x} y1={y} x2={sh.x} y2={knobY + 8} className="chromeArm" />
+            <circle cx={sh.x} cy={knobY} r={9} className="chromeKnob" />
+            <path
+              d={`M ${sh.x - 4.6} ${knobY - 1.4}
+                  A 4.6 4.6 0 1 1 ${sh.x - 2.4} ${knobY + 3.6}`}
+              className="chromeKnobIcon"
+            />
+            <path
+              d={`M ${sh.x - 7} ${knobY - 3.4} L ${sh.x - 2.4} ${knobY - 2.2} L ${sh.x - 4.2} ${knobY + 1.6} Z`}
+              className="chromeKnobArrow"
+            />
+          </g>
+        );
+      })}
+
+      {/* Line handles last, so they sit above every stroke and token. */}
       {diagram.shapes.map((l) => {
         if (l.k !== 'line' || !selected.has(l.id)) return null;
         const { a, b } = lineEnds(diagram, l);

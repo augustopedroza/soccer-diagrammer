@@ -110,10 +110,6 @@ export default function App() {
     [selected],
   );
 
-  const rotatable = diagram.shapes.filter(
-    (s) => selected.has(s.id) && (s.k === 'player' || s.k === 'kit'),
-  );
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
@@ -344,21 +340,6 @@ export default function App() {
             </section>
           )}
 
-          {rotatable.length > 0 && (
-            <section>
-              <h2>Rotate</h2>
-              <div className="segmented">
-                <button onClick={() => rotateSelected(-ROTATE_STEP)} title="Turn left ( [ )">
-                  ↺ {ROTATE_STEP}°
-                </button>
-                <button onClick={() => rotateSelected(ROTATE_STEP)} title="Turn right ( ] )">
-                  ↻ {ROTATE_STEP}°
-                </button>
-                <button onClick={() => rotateSelected(0, true)}>Reset</button>
-              </div>
-            </section>
-          )}
-
           <section>
             <h2>Lines</h2>
             <p className="hint">
@@ -491,7 +472,8 @@ export default function App() {
             </button>
             <p className="hint">
               Shift-click to add to a selection, or drag a box on empty grass. Moving
-              or deleting applies to everything selected.
+              or deleting applies to everything selected. Turn a player or a piece
+              of equipment by the handle above it — hold Shift to snap.
             </p>
           </section>
         </aside>
