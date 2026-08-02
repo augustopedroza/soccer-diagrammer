@@ -11,14 +11,15 @@ import {
 } from '../lib/geometry';
 import { isRef, type Diagram, type LineShape, type PlayerShape, type Team } from '../types/diagram';
 
-const OPP_CAP = '#14171c';
-
 /**
  * Player tokens.
  *
+ * Your team is a triangle pointing UP — the same direction the notation has your
+ * team attacking, so the token itself carries the direction of play. The
+ * opposition is a disc, which attacks down.
+ *
  * Two shapes rather than two colours, so a diagram survives being printed in
- * black and white or read by someone who cannot separate red from blue: your
- * team is a pennant with a point, the opposition is a round disc.
+ * grey or read by someone who cannot separate the two hues.
  */
 export function PlayerToken({
   team,
@@ -37,31 +38,40 @@ export function PlayerToken({
 }) {
   const r = 24;
   const fill = team === 'own' ? colors.own : colors.opp;
+
+  // An equilateral triangle about the token centre, corners softened so it does
+  // not read as a hazard sign next to the opposition disc.
+  const tri = (() => {
+    const R = r * 1.42;
+    const pts = [-90, 30, 150].map((deg) => {
+      const a = (deg * Math.PI) / 180;
+      return { x: Math.cos(a) * R, y: Math.sin(a) * R };
+    });
+    const k = 0.16;
+    let d = '';
+    for (let i = 0; i < 3; i++) {
+      const p = pts[i];
+      const prev = pts[(i + 2) % 3];
+      const next = pts[(i + 1) % 3];
+      const a = { x: p.x + (prev.x - p.x) * k, y: p.y + (prev.y - p.y) * k };
+      const b = { x: p.x + (next.x - p.x) * k, y: p.y + (next.y - p.y) * k };
+      d += `${i === 0 ? 'M' : 'L'}${a.x.toFixed(1)},${a.y.toFixed(1)} Q${p.x.toFixed(1)},${p.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)} `;
+    }
+    return `${d}Z`;
+  })();
+
   return (
     <g transform={`translate(${x} ${y})`} className="token">
-      {selected && <circle r={r + 7} className="selRing" />}
-      {team === 'own' ? (
-        <path
-          d={`M ${-r} ${-r + 4}
-              a ${r} ${r} 0 0 1 ${r * 2} 0
-              L ${r} ${r * 0.35}
-              L 0 ${r + 9}
-              L ${-r} ${r * 0.35} Z`}
-          fill={fill}
-        />
-      ) : (
-        <>
-          <circle r={r} fill={fill} />
-          {/* A dark cap keeps the two tokens apart even in one colour. */}
-          <path d={`M ${-r} 0 a ${r} ${r} 0 0 1 ${r * 2} 0 Z`} fill={OPP_CAP} fillOpacity={0.85} />
-        </>
-      )}
+      {selected && <circle r={r + 8} className="selRing" />}
+      {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
       <text
-        y={team === 'own' ? 2 : 1}
+        // A triangle is widest near its base, so the number sits below the
+        // centroid where there is room for two digits.
+        y={team === 'own' ? 10 : 1}
         textAnchor="middle"
         dominantBaseline="middle"
-        fill={team === 'own' ? inkOn(fill) : '#fff'}
-        fontSize={22}
+        fill={inkOn(fill)}
+        fontSize={team === 'own' ? 17 : 22}
         fontWeight={700}
       >
         {number}

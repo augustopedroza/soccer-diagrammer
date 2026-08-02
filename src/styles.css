@@ -63,9 +63,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .teamBlock { margin-bottom: 10px; }
 .teamName { font-size: 11.5px; font-weight: 650; margin-bottom: 4px; }
 .teamName span { font-weight: 400; color: var(--faint); }
-.numRow { display: flex; gap: 4px; margin-bottom: 4px; }
-.numBtn { background: none; border: 1px solid transparent; border-radius: 6px; padding: 1px; line-height: 0; }
-.numBtn:hover { border-color: var(--line); }
+.numRow { display: flex; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
+.numBtn {
+  background: none; border: 1.5px solid transparent; border-radius: 8px;
+  padding: 2px; line-height: 0;
+}
+.numBtn:hover { border-color: var(--line); background: var(--paper-2); }
 .numBtn.on { border-color: var(--accent); background: #eaf0f6; }
 
 .lineBtn {

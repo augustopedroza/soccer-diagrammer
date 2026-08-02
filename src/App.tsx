@@ -237,7 +237,7 @@ export default function App() {
                         title={`${t.label} — ${g.name} ${n}`}
                         onClick={() => setTool({ kind: 'player', team: t.team, number: n })}
                       >
-                        <svg viewBox="-30 -30 60 60" width="26" height="26" aria-hidden="true">
+                        <svg viewBox="-32 -37 64 56" width="46" height="40" aria-hidden="true">
                           <PlayerToken team={t.team} number={n} x={0} y={0} colors={diagram.colors} />
                         </svg>
                       </button>
@@ -331,9 +331,10 @@ export default function App() {
             selected={selected}
             onSelect={setSelected}
             onChange={change}
-            onToolUsed={() => {
-              if (tool.kind === 'kit') setTool({ kind: 'select' });
-            }}
+            // Back to select after anything is placed. Staying armed meant the
+            // next click — usually meant to pick that player up — dropped a
+            // second one on top of it.
+            onToolUsed={() => setTool({ kind: 'select' })}
           />
         </main>
       </div>
