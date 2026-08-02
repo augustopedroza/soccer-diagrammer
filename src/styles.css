@@ -39,12 +39,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .notice { padding: 8px 16px; background: #fff8e7; border-bottom: 1px solid #e8d5a8; font-size: 13px; }
 
-.work { display: flex; flex: 1; align-items: flex-start; gap: 16px; padding: 16px; }
+/* Three columns inside a fixed shell. `min-height: 0` is what actually keeps the
+   canvas in bounds: without it the flex item refuses to shrink below its
+   content, so a tall full pitch pushed .work past the viewport and the shell's
+   overflow:hidden clipped the bottom of the pitch. `stretch` then gives the
+   stage a definite height for the canvas to fill. */
+.work {
+  display: flex; flex: 1; min-height: 0; align-items: stretch;
+  gap: 14px; padding: 14px;
+}
 
 .palette {
-  width: 260px; flex: none; display: flex; flex-direction: column; gap: 16px;
-  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
+  width: 252px; flex: none; display: flex; flex-direction: column; gap: 14px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 13px; align-self: flex-start; max-height: 100%; overflow-y: auto;
 }
+
+.kitRail { width: 186px; }
 .palette h2 { font-size: 10px; letter-spacing: .09em; text-transform: uppercase; color: var(--faint); margin: 0 0 8px; }
 .palette section > button {
   display: flex; align-items: center; gap: 8px; width: 100%;
@@ -96,9 +107,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .kitBtn { background: var(--paper-2); border: 1px solid var(--line); border-radius: 5px; padding: 6px 4px; font-size: 10.5px; }
 .kitBtn.on { border-color: var(--accent); background: #eaf0f6; font-weight: 600; }
 
-.stage { flex: 1; display: flex; justify-content: center; align-items: flex-start; min-width: 0; min-height: 0; height: 100%; }
+.stage { flex: 1; display: flex; justify-content: center; align-items: stretch; min-width: 0; min-height: 0; }
 .canvas {
-  max-width: 100%; max-height: 100%; background: var(--paper);
+  /* The element simply fills its column; the drawing is centred and scaled
+     inside it by preserveAspectRatio. Letting CSS aspect-ratio size the element
+     meant a tall full pitch overflowed the shell and was clipped. */
+  width: 100%; height: 100%; min-height: 0;
   border: 1px solid var(--line); border-radius: var(--radius); touch-action: none;
 }
 .canvas.tool-select { cursor: default; }
@@ -113,6 +127,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media (max-width: 1000px) {
+  .app { height: auto; overflow: visible; }
+  .work { flex-direction: column; }
+  .palette, .kitRail { width: 100%; max-height: none; align-self: auto; }
+  .canvas { height: auto; aspect-ratio: auto; min-height: 60vh; }
   .app { height: auto; overflow: visible; }
   .work { flex-direction: column; padding: 10px; }
   .palette, .kitRail { width: 100%; max-height: none; }
@@ -144,3 +162,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 7px 10px; font-size: 12px; margin-bottom: 5px;
 }
 .tmplBtn:hover { border-color: var(--accent); background: #eaf0f6; }
+
+.handle { fill: #fff; stroke: #2f80ed; stroke-width: 2.5; cursor: grab; }
+.handleBend { fill: #2f80ed; stroke: #fff; }
+
+/* Shown while a line end is over a player it would attach to. */
+.snapRing {
+  fill: rgba(47, 128, 237, 0.16);
+  stroke: #2f80ed;
+  stroke-width: 3;
+  pointer-events: none;
+}

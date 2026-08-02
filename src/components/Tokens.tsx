@@ -190,17 +190,56 @@ export function KitMark({
             <line x1={-w / 2 + 4} y1={0} x2={w / 2 - 4} y2={0} stroke={stroke} strokeWidth={1} strokeOpacity={0.45} strokeDasharray="4 3" />
           </>
         );
-      case 'ball':
+      case 'ball': {
+        // A truncated icosahedron read from above: one black pentagon at the
+        // centre, five more cut off by the rim, joined by the seams between.
+        const R = w / 2;
+        const pent = (cx: number, cy: number, rad: number, rot: number) =>
+          Array.from({ length: 5 }, (_, i) => {
+            const a = ((i * 72 + rot - 90) * Math.PI) / 180;
+            return `${(cx + Math.cos(a) * rad).toFixed(2)},${(cy + Math.sin(a) * rad).toFixed(2)}`;
+          }).join(' ');
+        const clipId = `ball-${Math.round(R * 100)}`;
         return (
           <>
-            <circle r={w / 2} fill="#fff" stroke={stroke} strokeWidth={1.8} />
-            <path d="M0,-6.5 L6.2,-2 L3.8,5.3 L-3.8,5.3 L-6.2,-2 Z" fill={stroke} />
-            {[0, 72, 144, 216, 288].map((a) => (
-              <line key={a} x1={0} y1={0} x2={Math.sin((a * Math.PI) / 180) * 12} y2={-Math.cos((a * Math.PI) / 180) * 12}
-                stroke={stroke} strokeWidth={1.5} transform="rotate(36)" strokeOpacity={0.85} />
-            ))}
+            <defs>
+              <clipPath id={clipId}>
+                <circle r={R - 0.8} />
+              </clipPath>
+            </defs>
+            <circle r={R} fill="#fff" stroke={stroke} strokeWidth={1.6} />
+            <g clipPath={`url(#${clipId})`}>
+              <polygon points={pent(0, 0, R * 0.34, 0)} fill={stroke} />
+              {Array.from({ length: 5 }, (_, i) => {
+                const a = ((i * 72 - 90) * Math.PI) / 180;
+                const cx = Math.cos(a) * R * 0.92;
+                const cy = Math.sin(a) * R * 0.92;
+                return (
+                  <polygon
+                    key={i}
+                    points={pent(cx, cy, R * 0.34, i * 72 + 36)}
+                    fill={stroke}
+                  />
+                );
+              })}
+              {Array.from({ length: 5 }, (_, i) => {
+                const a = ((i * 72 - 90 + 36) * Math.PI) / 180;
+                return (
+                  <line
+                    key={`s${i}`}
+                    x1={Math.cos(a) * R * 0.32}
+                    y1={Math.sin(a) * R * 0.32}
+                    x2={Math.cos(a) * R}
+                    y2={Math.sin(a) * R}
+                    stroke={stroke}
+                    strokeWidth={1.3}
+                  />
+                );
+              })}
+            </g>
           </>
         );
+      }
       case 'cap':
         return (
           <>

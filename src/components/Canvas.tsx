@@ -6,6 +6,7 @@ import {
   bendFor,
   clampToBox,
   controlPoint,
+  dist,
   hitTest,
   lineEnds,
   playerAt,
@@ -25,13 +26,19 @@ export type Tool =
   | { kind: 'kit'; item: string };
 
 interface Drag {
-  mode: 'line' | 'move' | 'marquee';
+  mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend';
   start: Point;
   now: Point;
   shift: boolean;
   /** Sampled pointer path, used to read the bow out of a Shift drag. */
   path: Point[];
+  /** For endpoint and bend drags: which line, and which end of it. */
+  lineId?: string;
+  end?: 'from' | 'to';
 }
+
+/** How close a click has to be to a handle to grab it. */
+const HANDLE_GRAB = 16;
 
 let seq = 0;
 const nextId = (p: string) => `${p}${++seq}-${Math.floor(Math.random() * 1e6).toString(36)}`;
@@ -72,14 +79,23 @@ export function Canvas({
   const [drag, setDrag] = useState<Drag | null>(null);
   const box = surfaceBox(diagram.surface);
 
+  /**
+   * Client point to surface coordinates, via the SVG's own screen matrix.
+   *
+   * The element fills its column and the drawing is letterboxed inside it by
+   * preserveAspectRatio, so the element's bounding box is NOT the drawing's
+   * box. Scaling by the rect would put every click slightly off wherever the
+   * two differ; the CTM is exact by construction.
+   */
   const toSurface = (e: { clientX: number; clientY: number }): Point => {
     const svg = svgRef.current;
-    if (!svg) return { x: 0, y: 0 };
-    const r = svg.getBoundingClientRect();
-    return clampToBox(
-      { x: ((e.clientX - r.left) / r.width) * box.w, y: ((e.clientY - r.top) / r.height) * box.h },
-      box,
-    );
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const local = pt.matrixTransform(ctm.inverse());
+    return clampToBox({ x: local.x, y: local.y }, box);
   };
 
   const kitSize = (id: string) => {
@@ -106,6 +122,27 @@ export function Canvas({
     if (tool.kind === 'line') {
       setDrag({ mode: 'line', start: p, now: p, shift: e.shiftKey, path: [p] });
       return;
+    }
+
+    // Handles on a selected line come first: they sit on top and are the whole
+    // point of having selected it.
+    for (const l of diagram.shapes) {
+      if (l.k !== 'line' || !selected.has(l.id)) continue;
+      const { a, b } = lineEnds(diagram, l);
+      const c = controlPoint(a, b, l.bend);
+      const mid = pointOnCurve(a, c, b, 0.5);
+      if (dist(p, a) <= HANDLE_GRAB) {
+        setDrag({ mode: 'endpoint', start: p, now: p, shift: false, path: [p], lineId: l.id, end: 'from' });
+        return;
+      }
+      if (dist(p, b) <= HANDLE_GRAB) {
+        setDrag({ mode: 'endpoint', start: p, now: p, shift: false, path: [p], lineId: l.id, end: 'to' });
+        return;
+      }
+      if (dist(p, mid) <= HANDLE_GRAB) {
+        setDrag({ mode: 'bend', start: p, now: p, shift: false, path: [p], lineId: l.id });
+        return;
+      }
     }
 
     const hit = hitTest(diagram, p, kitSize);
@@ -138,6 +175,36 @@ export function Canvas({
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
     if (!drag) return;
     const p = toSurface(e);
+
+    if (drag.mode === 'endpoint' && drag.lineId) {
+      onChange(
+        {
+          ...diagram,
+          shapes: diagram.shapes.map((sh) => {
+            if (sh.k !== 'line' || sh.id !== drag.lineId) return sh;
+            // Dragging an end detaches it; releasing over a player re-attaches.
+            return drag.end === 'from'
+              ? { ...sh, from: { ...p }, lastFrom: { ...p } }
+              : { ...sh, to: { ...p }, lastTo: { ...p } };
+          }),
+        },
+        false,
+      );
+    }
+
+    if (drag.mode === 'bend' && drag.lineId) {
+      onChange(
+        {
+          ...diagram,
+          shapes: diagram.shapes.map((sh) => {
+            if (sh.k !== 'line' || sh.id !== drag.lineId) return sh;
+            const { a, b } = lineEnds(diagram, sh);
+            return { ...sh, bend: bendFor(a, b, p) };
+          }),
+        },
+        false,
+      );
+    }
 
     if (drag.mode === 'move') {
       const dx = p.x - drag.now.x;
@@ -211,6 +278,24 @@ export function Canvas({
       }
     }
 
+    if (drag.mode === 'endpoint' && drag.lineId) {
+      const over = playerAt(diagram, p);
+      onChange(
+        {
+          ...diagram,
+          shapes: diagram.shapes.map((sh) => {
+            if (sh.k !== 'line' || sh.id !== drag.lineId) return sh;
+            const anchor = over ? { ref: over.id } : { ...p };
+            return drag.end === 'from'
+              ? { ...sh, from: anchor, lastFrom: { ...p } }
+              : { ...sh, to: anchor, lastTo: { ...p } };
+          }),
+        },
+        true,
+      );
+    }
+
+    if (drag.mode === 'bend') onChange(diagram, true);
     if (drag.mode === 'move') onChange(diagram, true);
     setDrag(null);
   }
@@ -256,6 +341,19 @@ export function Canvas({
     );
   })();
 
+  /**
+   * The player a line end would attach to if released right now.
+   *
+   * Attaching is invisible otherwise — the line just happens to end near a
+   * token — so it needs to be obvious before you let go, not after.
+   */
+  const snapTarget = (() => {
+    if (!drag) return null;
+    if (drag.mode === 'line') return playerAt(diagram, drag.now);
+    if (drag.mode === 'endpoint') return playerAt(diagram, drag.now);
+    return null;
+  })();
+
   const lines = diagram.shapes.filter((s) => s.k === 'line');
   const rest = diagram.shapes.filter((s) => s.k !== 'line');
 
@@ -264,7 +362,7 @@ export function Canvas({
       ref={svgRef}
       className={`canvas tool-${tool.kind}`}
       viewBox={`0 0 ${box.w} ${box.h}`}
-      style={{ aspectRatio: `${box.w} / ${box.h}` }}
+      preserveAspectRatio="xMidYMid meet"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -286,7 +384,29 @@ export function Canvas({
           <KitMark key={s.id} item={s.item} x={s.x} y={s.y} selected={selected.has(s.id)} />
         ) : null,
       )}
+      {snapTarget && (
+        <circle
+          cx={snapTarget.x}
+          cy={snapTarget.y}
+          r={34}
+          className="snapRing"
+        />
+      )}
       {preview}
+      {/* Handles last, so they sit above every stroke and token. */}
+      {diagram.shapes.map((l) => {
+        if (l.k !== 'line' || !selected.has(l.id)) return null;
+        const { a, b } = lineEnds(diagram, l);
+        const c = controlPoint(a, b, l.bend);
+        const mid = pointOnCurve(a, c, b, 0.5);
+        return (
+          <g key={`h${l.id}`} className="handles">
+            <circle cx={a.x} cy={a.y} r={7} className="handle" />
+            <circle cx={b.x} cy={b.y} r={7} className="handle" />
+            <circle cx={mid.x} cy={mid.y} r={6} className="handle handleBend" />
+          </g>
+        );
+      })}
     </svg>
   );
 }
