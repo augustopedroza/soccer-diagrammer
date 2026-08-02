@@ -194,6 +194,16 @@ export function distToLine(d: Diagram, l: LineShape, p: Point): number {
   return best;
 }
 
+/**
+ * Approximate box around a label. SVG will not tell us the rendered width
+ * without measuring, and an estimate from the glyph count is close enough to
+ * click accurately at these sizes.
+ */
+export function textBox(t: { text: string; size: number }): { w: number; h: number } {
+  const chars = Math.max(1, t.text.length);
+  return { w: chars * t.size * 0.56, h: t.size * 1.25 };
+}
+
 /** How close a click has to be to a stroke to count as hitting it. */
 export const LINE_GRAB = 14;
 
@@ -210,6 +220,10 @@ export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): S
     if (s.k === 'kit') {
       const { x: w, y: h } = kitSize(s.item);
       if (Math.abs(p.x - s.x) <= w / 2 + 4 && Math.abs(p.y - s.y) <= h / 2 + 4) return s;
+    }
+    if (s.k === 'text') {
+      const { w, h } = textBox(s);
+      if (Math.abs(p.x - s.x) <= w / 2 + 6 && Math.abs(p.y - s.y) <= h / 2 + 6) return s;
     }
   }
   let closest: { s: Shape; d: number } | undefined;

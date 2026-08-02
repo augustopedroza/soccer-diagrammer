@@ -13,6 +13,7 @@ import {
   lineEnds,
   playerAt,
   resolveEnd,
+  textBox,
 } from '../src/lib/geometry';
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
@@ -203,6 +204,58 @@ describe('save and open', () => {
     if (!r.ok) return;
     expect(r.diagram.shapes).toHaveLength(1);
     expect(r.dropped).toBe(1);
+  });
+});
+
+describe('labels', () => {
+  it('round-trips a label with its size', () => {
+    const d = emptyDiagram();
+    d.shapes = [{ k: 'text', id: 't1', x: 100, y: 200, text: 'Overload here', size: 32 }];
+    const r = parse(serialize(d));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.shapes[0]).toEqual(d.shapes[0]);
+  });
+
+  it('caps an absurdly long label rather than refusing the file', () => {
+    const r = parse(
+      JSON.stringify({
+        kind: FILE_KIND,
+        version: FILE_VERSION,
+        diagram: { shapes: [{ k: 'text', id: 't', x: 1, y: 1, text: 'a'.repeat(9000), size: 32 }] },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const t = r.diagram.shapes[0] as { text: string };
+    expect(t.text.length).toBe(120);
+  });
+
+  it('falls back to a usable size and drops a label with no text', () => {
+    const r = parse(
+      JSON.stringify({
+        kind: FILE_KIND,
+        version: FILE_VERSION,
+        diagram: {
+          shapes: [
+            { k: 'text', id: 'ok', x: 1, y: 1, text: 'fine', size: 9999 },
+            { k: 'text', id: 'bad', x: 1, y: 1, size: 32 },
+          ],
+        },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.shapes).toHaveLength(1);
+    expect(r.diagram.shapes[0]).toMatchObject({ id: 'ok', size: 32 });
+    expect(r.dropped).toBe(1);
+  });
+
+  it('sizes its hit box from the glyph count', () => {
+    const short = textBox({ text: 'A', size: 32 });
+    const long = textBox({ text: 'A much longer label', size: 32 });
+    expect(long.w).toBeGreaterThan(short.w);
+    expect(long.h).toBe(short.h);
   });
 });
 

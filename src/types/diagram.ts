@@ -51,6 +51,16 @@ export interface LineShape {
   lastTo: { x: number; y: number };
 }
 
+export interface TextShape {
+  k: 'text';
+  id: string;
+  x: number;
+  y: number;
+  text: string;
+  /** Cap height in surface units. */
+  size: number;
+}
+
 export interface KitShape {
   k: 'kit';
   id: string;
@@ -59,7 +69,7 @@ export interface KitShape {
   y: number;
 }
 
-export type Shape = PlayerShape | LineShape | KitShape;
+export type Shape = PlayerShape | LineShape | KitShape | TextShape;
 
 /** Kit colours. Shape still distinguishes the teams, so a diagram survives
  *  being printed in grey or read by someone who cannot separate two hues. */
@@ -81,6 +91,9 @@ export interface Diagram {
  * coordinate can never exceed the longest a box can be.
  */
 export const MAX_COORD = 1000;
+
+export const TEXT_SIZES = [22, 32, 46] as const;
+export const MAX_LABEL = 120;
 
 export function isRef(e: Endpoint): e is { ref: string } {
   return 'ref' in e;

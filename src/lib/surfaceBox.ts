@@ -23,7 +23,9 @@ export const CROP_FRACTION: Record<Crop, number> = {
   full: 1,
   'three-quarter': 0.75,
   half: 0.5,
-  'penalty-box': 0.3,
+  // The 16.5 m penalty area plus about six metres in front of it. At 0.3 this
+  // was 31 m of a 105 m pitch — effectively another half view.
+  'penalty-box': 0.22,
 };
 
 export interface Box {

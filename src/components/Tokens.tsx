@@ -2,6 +2,7 @@ import { equipmentSpec } from '../data/equipment';
 import { DEFAULT_COLORS, inkOn, lineSpec } from '../data/notation';
 import {
   angleOnCurve,
+  textBox,
   controlPoint,
   lineEnds,
   pointOnCurve,
@@ -323,6 +324,52 @@ export function KitMark({
     <g transform={`translate(${x} ${y})`} className="token">
       {selected && <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} className="selRing" rx={5} />}
       {body()}
+    </g>
+  );
+}
+
+/**
+ * A free label.
+ *
+ * Drawn with a white halo behind the glyphs via paint-order, so it stays
+ * readable on dark grass, on a pale court and in line-art mode without needing
+ * to know which surface is underneath.
+ */
+export function TextMark({
+  shape,
+  selected,
+}: {
+  shape: { x: number; y: number; text: string; size: number };
+  selected?: boolean;
+}) {
+  const { w, h } = textBox(shape);
+  return (
+    <g className="token">
+      {selected && (
+        <rect
+          x={shape.x - w / 2 - 6}
+          y={shape.y - h / 2 - 4}
+          width={w + 12}
+          height={h + 8}
+          rx={4}
+          className="selRing"
+        />
+      )}
+      <text
+        x={shape.x}
+        y={shape.y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={shape.size}
+        fontWeight={700}
+        fill="#14171c"
+        stroke="#fff"
+        strokeWidth={shape.size * 0.18}
+        paintOrder="stroke"
+        strokeLinejoin="round"
+      >
+        {shape.text}
+      </text>
     </g>
   );
 }

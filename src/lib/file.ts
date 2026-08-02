@@ -1,6 +1,6 @@
 import { EQUIPMENT_IDS } from '../data/equipment';
 import { ALL_NUMBERS, DEFAULT_COLORS } from '../data/notation';
-import { MAX_COORD, type Diagram, type Shape } from '../types/diagram';
+import { MAX_COORD, MAX_LABEL, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
 
 export const FILE_KIND = 'soccer-session-diagram';
 export const FILE_VERSION = 1;
@@ -111,6 +111,21 @@ export function parse(text: string): ParseResult {
         continue;
       }
       shapes.push({ k: 'kit', id, item: sh.item, x, y });
+      seen.add(id);
+    } else if (sh.k === 'text' && x !== null && y !== null) {
+      if (typeof sh.text !== 'string') {
+        dropped++;
+        continue;
+      }
+      const size = num(sh.size, TEXT_SIZES[0], TEXT_SIZES[TEXT_SIZES.length - 1]);
+      shapes.push({
+        k: 'text',
+        id,
+        x,
+        y,
+        text: sh.text.slice(0, MAX_LABEL),
+        size: size ?? TEXT_SIZES[1],
+      });
       seen.add(id);
     } else if (sh.k === 'line') {
       if (!LINE_TYPES.has(sh.type as string)) {

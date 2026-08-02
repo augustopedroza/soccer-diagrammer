@@ -6,6 +6,7 @@ import { FORMATIONS, placements, type Formation } from './data/formations';
 import { COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
 import { surfaceBox } from './lib/surfaceBox';
+import { TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
@@ -107,6 +108,7 @@ export default function App() {
         setSelected(new Set());
       }
       if (e.key.toLowerCase() === 's') setTool({ kind: 'select' });
+      if (e.key.toLowerCase() === 'l') setTool({ kind: 'text' });
       // First letter of what the line stands for. With lines selected this
       // retypes them, which is the same verb applied to what is in hand.
       const spec = LINE_SPECS.find((sp) => sp.key === e.key.toLowerCase());
@@ -150,6 +152,40 @@ export default function App() {
   }
 
   const [templateTeam, setTemplateTeam] = useState<Team>('own');
+  const labelInput = useRef<HTMLInputElement>(null);
+
+  const selectedLabels = diagram.shapes.filter(
+    (s): s is Extract<typeof s, { k: 'text' }> => s.k === 'text' && selected.has(s.id),
+  );
+
+  /**
+   * Put the caret in the field whenever a single label becomes the selection.
+   *
+   * A fresh one reads "Label" until it is given a name, and the field does not
+   * exist yet at the moment of placing — so this has to wait for the render
+   * rather than run inside the click handler.
+   */
+  const focusedLabel = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedLabels.length !== 1) {
+      focusedLabel.current = null;
+      return;
+    }
+    const id = selectedLabels[0].id;
+    if (focusedLabel.current === id) return;
+    focusedLabel.current = id;
+    labelInput.current?.focus();
+    labelInput.current?.select();
+  }, [selectedLabels]);
+
+  function editLabels(patch: { text?: string; size?: number }) {
+    commitNow({
+      ...diagram,
+      shapes: diagram.shapes.map((sh) =>
+        sh.k === 'text' && selected.has(sh.id) ? { ...sh, ...patch } : sh,
+      ),
+    });
+  }
 
   /**
    * Drops a whole starting XI. Replaces that team's players rather than adding
@@ -249,6 +285,31 @@ export default function App() {
               ))}
             </div>
           </section>
+
+          {selectedLabels.length > 0 && (
+            <section>
+              <h2>{selectedLabels.length > 1 ? `${selectedLabels.length} labels` : 'Label'}</h2>
+              <input
+                ref={labelInput}
+                className="labelInput"
+                value={selectedLabels.length === 1 ? selectedLabels[0].text : ''}
+                placeholder={selectedLabels.length > 1 ? 'Set all…' : 'Label text'}
+                maxLength={MAX_LABEL}
+                onChange={(e) => editLabels({ text: e.target.value })}
+              />
+              <div className="segmented">
+                {TEXT_SIZES.map((sz, i) => (
+                  <button
+                    key={sz}
+                    aria-pressed={selectedLabels.every((l) => l.size === sz)}
+                    onClick={() => editLabels({ size: sz })}
+                  >
+                    {['Small', 'Medium', 'Large'][i]}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section>
             <h2>Lines</h2>
@@ -353,6 +414,10 @@ export default function App() {
               Select / move
               <kbd className="lineKey">S</kbd>
             </button>
+            <button onClick={() => setTool({ kind: 'text' })} aria-pressed={tool.kind === 'text'}>
+              Add a label
+              <kbd className="lineKey">L</kbd>
+            </button>
             <button
               disabled={selected.size === 0}
               onClick={() => {
@@ -394,9 +459,13 @@ export default function App() {
             // meant to pick that player up, dropped a second one on top of it. A
             // line needs a drag, so it cannot misfire and stays armed for the
             // next one.
-            onToolUsed={() =>
-              setTool((t) => (t.kind === 'player' || t.kind === 'kit' ? { kind: 'select' } : t))
-            }
+            onToolUsed={() => {
+              setTool((t) =>
+                t.kind === 'player' || t.kind === 'kit' || t.kind === 'text'
+                  ? { kind: 'select' }
+                  : t,
+              );
+            }}
           />
         </main>
 

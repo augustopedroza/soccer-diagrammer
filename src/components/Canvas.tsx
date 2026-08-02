@@ -15,15 +15,16 @@ import {
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
+import { TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
 import { SurfaceSvg } from './Surface';
-import { KitMark, LineMark, PlayerMark } from './Tokens';
+import { KitMark, LineMark, PlayerMark, TextMark } from './Tokens';
 
 export type Tool =
   | { kind: 'select' }
   | { kind: 'player'; team: Team; number: number }
   | { kind: 'line'; type: LineType }
-  | { kind: 'kit'; item: string };
+  | { kind: 'kit'; item: string }
+  | { kind: 'text' };
 
 interface Drag {
   mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend';
@@ -108,11 +109,13 @@ export function Canvas({
     const p = toSurface(e);
     e.currentTarget.setPointerCapture?.(e.pointerId);
 
-    if (tool.kind === 'player' || tool.kind === 'kit') {
+    if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
       const shape: Shape =
         tool.kind === 'player'
           ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, ...p }
-          : { k: 'kit', id: nextId('k'), item: tool.item, ...p };
+          : tool.kind === 'kit'
+            ? { k: 'kit', id: nextId('k'), item: tool.item, ...p }
+            : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[1], ...p };
       onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
       onSelect(new Set([shape.id]));
       onToolUsed();
@@ -213,7 +216,7 @@ export function Canvas({
         {
           ...diagram,
           shapes: diagram.shapes.map((s) =>
-            selected.has(s.id) && (s.k === 'player' || s.k === 'kit')
+            selected.has(s.id) && (s.k === 'player' || s.k === 'kit' || s.k === 'text')
               ? { ...s, ...clampToBox({ x: s.x + dx, y: s.y + dy }, box) }
               : s,
           ),
@@ -382,6 +385,8 @@ export function Canvas({
           <PlayerMark key={s.id} shape={s} selected={selected.has(s.id)} colors={diagram.colors} />
         ) : s.k === 'kit' ? (
           <KitMark key={s.id} item={s.item} x={s.x} y={s.y} selected={selected.has(s.id)} />
+        ) : s.k === 'text' ? (
+          <TextMark key={s.id} shape={s} selected={selected.has(s.id)} />
         ) : null,
       )}
       {snapTarget && (

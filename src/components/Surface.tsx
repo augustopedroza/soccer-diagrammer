@@ -3,7 +3,6 @@ import {
   FULL_LENGTH,
   cropOffset,
   facingRotation,
-  isRotated,
   pitchBox,
   surfaceBox,
 } from '../lib/surfaceBox';
@@ -201,37 +200,43 @@ export function SurfaceSvg({ surface }: { surface: Surface }) {
   const pitch = pitchBox(surface.sport);
   const visibleH = FULL_LENGTH * CROP_FRACTION[surface.crop];
   const stroke = surface.style === 'line' ? INK : LINE;
-  const rot = facingRotation(surface);
-  const rotated = isRotated(surface);
-
-  const [bandA, bandB] =
-    surface.sport === 'soccer' ? [GREEN_A, GREEN_B] : [COURT_A, COURT_B];
-
-  // Bands run across the pitch and are cut by the crop, so the striping stays
-  // continuous with the full pitch rather than restarting per variant.
+  const [bandA, bandB] = surface.sport === 'soccer' ? [GREEN_A, GREEN_B] : [COURT_A, COURT_B];
   const bandH = FULL_LENGTH / 10;
 
+  /**
+   * One transform for all four facings.
+   *
+   * Move to the centre of the visible box, turn, then step back by half the
+   * cropped pitch and slide the crop into place. Because every step is about
+   * the centre, a rotated box — where width and height swap — falls out of the
+   * same expression instead of needing its own case. The previous version
+   * special-cased rotation with hand-tuned offsets, and left and right drew
+   * off-screen entirely.
+   */
+  const transform = [
+    `translate(${box.w / 2} ${box.h / 2})`,
+    `rotate(${facingRotation(surface)})`,
+    `translate(${-pitch.w / 2} ${-visibleH / 2})`,
+    `translate(0 ${-cropOffset(surface)})`,
+  ].join(' ');
+
   return (
-    <g>
-      {/* Rotate about the centre of the visible box, then draw the cropped
-          pitch in its own upright coordinates. */}
-      <g transform={rotated ? `rotate(${rot} ${box.w / 2} ${box.h / 2}) translate(${(box.w - pitch.w) / 2 - (box.w - box.h) / 2} ${(box.h - visibleH) / 2 + (box.w - box.h) / 2})` : `rotate(${rot} ${box.w / 2} ${box.h / 2})`}>
-        <g transform={`translate(0 ${-cropOffset(surface)})`}>
-          {surface.style === 'shaded' ? (
-            <>
-              <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill={bandA} />
-              {Array.from({ length: 10 }, (_, i) =>
-                i % 2 === 1 ? (
-                  <rect key={i} x={0} y={i * bandH} width={pitch.w} height={bandH} fill={bandB} />
-                ) : null,
-              )}
-            </>
-          ) : (
-            <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill="#fff" />
+    <g transform={transform}>
+      {surface.style === 'shaded' ? (
+        <>
+          <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill={bandA} />
+          {/* Bands run the length of the pitch and are cut by the crop, so the
+              striping stays continuous rather than restarting per variant. */}
+          {Array.from({ length: 10 }, (_, i) =>
+            i % 2 === 1 ? (
+              <rect key={i} x={0} y={i * bandH} width={pitch.w} height={bandH} fill={bandB} />
+            ) : null,
           )}
-          <Marks sport={surface.sport} stroke={stroke} />
-        </g>
-      </g>
+        </>
+      ) : (
+        <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill="#fff" />
+      )}
+      <Marks sport={surface.sport} stroke={stroke} />
     </g>
   );
 }

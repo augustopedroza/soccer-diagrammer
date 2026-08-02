@@ -173,3 +173,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   stroke-width: 3;
   pointer-events: none;
 }
+
+.labelInput {
+  width: 100%; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 9px; margin-bottom: 6px; background: #fff;
+}
+.labelInput:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
