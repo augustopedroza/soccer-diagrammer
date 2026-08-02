@@ -16,9 +16,9 @@ export interface EquipmentSpec {
 }
 
 export const EQUIPMENT: EquipmentSpec[] = [
-  { id: 'goal', label: 'Goal', group: 'Goals', w: 130, h: 42 },
+  { id: 'goal', label: 'Goal', group: 'Goals', w: 132, h: 46 },
   { id: 'goal-toppled', label: 'Goal toppled', group: 'Goals', w: 130, h: 26 },
-  { id: 'mini-goal', label: 'Mini goal', group: 'Goals', w: 78, h: 30 },
+  { id: 'mini-goal', label: 'Mini goal', group: 'Goals', w: 82, h: 34 },
   { id: 'mini-goal-toppled', label: 'Mini goal toppled', group: 'Goals', w: 78, h: 18 },
   { id: 'inside-goal', label: 'Inside goal', group: 'Goals', w: 96, h: 34 },
 

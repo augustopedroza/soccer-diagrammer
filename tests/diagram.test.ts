@@ -24,9 +24,9 @@ function withPlayers(): Diagram {
   const d = emptyDiagram();
   d.title = 'Tuesday — breaking lines';
   d.shapes = [
-    { k: 'player', id: 'p1', team: 'own', number: 6, x: 300, y: 700 },
-    { k: 'player', id: 'p2', team: 'own', number: 10, x: 600, y: 400 },
-    { k: 'player', id: 'p3', team: 'opp', number: 4, x: 500, y: 500 },
+    { k: 'player', id: 'p1', team: 'own', number: 6, x: 300, y: 700, rot: 0 },
+    { k: 'player', id: 'p2', team: 'own', number: 10, x: 600, y: 400, rot: 0 },
+    { k: 'player', id: 'p3', team: 'opp', number: 4, x: 500, y: 500, rot: 0 },
     {
       k: 'line',
       id: 'l1',
@@ -157,7 +157,7 @@ describe('save and open', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // Unknown enums fall back rather than propagating.
-    expect(r.diagram.surface).toEqual({ sport: 'soccer', crop: 'half', facing: 'up', style: 'shaded' });
+    expect(r.diagram.surface).toEqual({ sport: 'soccer', crop: 'full', facing: 'up', style: 'shaded' });
     expect(r.diagram.shapes.map((s) => s.id)).toEqual(['ok']);
     expect(r.dropped).toBe(5);
   });
@@ -298,13 +298,26 @@ describe('formations', () => {
     }
   });
 
-  it('keeps the double pivot behind its 10', () => {
-    // The one shape where the rule above cannot hold: 6 and 8 sit side by side
-    // and the 10 plays in front of them.
-    for (const f of FORMATIONS.filter((x) => x.midfield === 'double-pivot')) {
+  it('pairs the double pivot: 6 central, 8 close on its right, both behind the 10', () => {
+    const pivots = FORMATIONS.filter((x) => x.midfield === 'double-pivot');
+    expect(pivots.length).toBeGreaterThan(0);
+    // The widest 10-to-8 gap among the triangles, for comparison: a pivot has
+    // to read as a pair rather than as two players split across the pitch.
+    const widest = Math.max(
+      ...FORMATIONS.filter((f) => f.midfield === 'triangle').map((f) => {
+        const at = (n: number) => f.spots.find((p) => p.number === n)!;
+        return at(8).fx - at(10).fx;
+      }),
+    );
+
+    for (const f of pivots) {
       const at = (n: number) => f.spots.find((p) => p.number === n)!;
-      expect(at(6).fy, f.id).toBeGreaterThan(at(10).fy);
-      expect(at(8).fy, f.id).toBeGreaterThan(at(10).fy);
+      const [six, eight, ten] = [at(6), at(8), at(10)];
+      expect(six.fy, `${f.id}: 6 behind the 10`).toBeGreaterThan(ten.fy);
+      expect(eight.fy, `${f.id}: 8 behind the 10`).toBeGreaterThan(ten.fy);
+      expect(Math.abs(six.fx - 0.5), `${f.id}: 6 holds the middle`).toBeLessThanOrEqual(0.08);
+      expect(eight.fx, `${f.id}: 8 on its right`).toBeGreaterThan(six.fx);
+      expect(eight.fx - six.fx, `${f.id}: close together`).toBeLessThan(widest);
     }
   });
 

@@ -29,9 +29,9 @@ export interface Formation {
    * How the central midfield is built.
    *
    * `triangle` is the 6 behind a 10 and an 8. `double-pivot` is the 6 and 8
-   * side by side with the 10 ahead of them — there the 10 is the furthest
-   * forward of the three by definition, so the "6 between 10 and 8" rule
-   * cannot apply and is not asserted.
+   * paired with the 10 ahead of them — there the 10 is the furthest forward of
+   * the three by definition, so the "6 between 10 and 8" rule cannot apply.
+   * Instead the 6 holds the middle with the 8 close on its right.
    */
   midfield: 'triangle' | 'double-pivot';
   spots: Placement[];
@@ -85,8 +85,10 @@ export const FORMATIONS: Formation[] = [
     spots: [
       GK,
       ...BACK_FOUR,
-      { number: 6, fx: 0.38, fy: 0.64 },
-      { number: 8, fx: 0.64, fy: 0.62 },
+      // A pivot is a pair, not two halves of the pitch: the 6 holds the middle
+      // and the 8 plays just off its right shoulder.
+      { number: 6, fx: 0.46, fy: 0.64 },
+      { number: 8, fx: 0.62, fy: 0.62 },
       { number: 11, fx: 0.13, fy: 0.42 },
       { number: 10, fx: 0.5, fy: 0.45 },
       { number: 7, fx: 0.88, fy: 0.42 },

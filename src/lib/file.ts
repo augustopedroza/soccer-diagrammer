@@ -16,7 +16,7 @@ const LINE_TYPES = new Set(['pass', 'dribble', 'run', 'tactical']);
 export function emptyDiagram(): Diagram {
   return {
     title: '',
-    surface: { sport: 'soccer', crop: 'half', facing: 'up', style: 'shaded' },
+    surface: { sport: 'soccer', crop: 'full', facing: 'up', style: 'shaded' },
     colors: { ...DEFAULT_COLORS },
     shapes: [],
   };
@@ -29,6 +29,10 @@ export function serialize(d: Diagram): string {
 export type ParseResult =
   | { ok: true; diagram: Diagram; dropped: number }
   | { ok: false; reason: string };
+
+/** Any angle is valid; it is just normalised so the stored value stays sane. */
+const rot = (v: unknown): number =>
+  typeof v === 'number' && Number.isFinite(v) ? ((v % 360) + 360) % 360 : 0;
 
 const num = (v: unknown, lo: number, hi: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
@@ -63,7 +67,7 @@ export function parse(text: string): ParseResult {
   const s = (src.surface ?? {}) as Record<string, unknown>;
   out.surface = {
     sport: SPORTS.has(s.sport as string) ? (s.sport as Diagram['surface']['sport']) : 'soccer',
-    crop: CROPS.has(s.crop as string) ? (s.crop as Diagram['surface']['crop']) : 'half',
+    crop: CROPS.has(s.crop as string) ? (s.crop as Diagram['surface']['crop']) : 'full',
     facing: FACINGS.has(s.facing as string) ? (s.facing as Diagram['surface']['facing']) : 'up',
     style: STYLES.has(s.style as string) ? (s.style as Diagram['surface']['style']) : 'shaded',
   };
@@ -103,14 +107,14 @@ export function parse(text: string): ParseResult {
         dropped++;
         continue;
       }
-      shapes.push({ k: 'player', id, team: sh.team, number: n, x, y });
+      shapes.push({ k: 'player', id, team: sh.team, number: n, x, y, rot: rot(sh.rot) });
       seen.add(id);
     } else if (sh.k === 'kit' && x !== null && y !== null) {
       if (typeof sh.item !== 'string' || !EQUIPMENT_IDS.has(sh.item)) {
         dropped++;
         continue;
       }
-      shapes.push({ k: 'kit', id, item: sh.item, x, y });
+      shapes.push({ k: 'kit', id, item: sh.item, x, y, rot: rot(sh.rot) });
       seen.add(id);
     } else if (sh.k === 'text' && x !== null && y !== null) {
       if (typeof sh.text !== 'string') {

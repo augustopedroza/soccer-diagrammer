@@ -6,7 +6,7 @@ import { FORMATIONS, placements, type Formation } from './data/formations';
 import { COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
 import { surfaceBox } from './lib/surfaceBox';
-import { TEXT_SIZES, MAX_LABEL } from './types/diagram';
+import { ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
@@ -85,6 +85,35 @@ export default function App() {
     [diagram, selected, selectedLines.length, commitNow],
   );
 
+  /** Turns everything selected that has a facing. Labels and lines have none. */
+  const rotateSelected = useCallback(
+    (deltaOrAbsolute: number, absolute = false) => {
+      setDiagram((prev) => {
+        const next = {
+          ...prev,
+          shapes: prev.shapes.map((sh) =>
+            selected.has(sh.id) && (sh.k === 'player' || sh.k === 'kit')
+              ? {
+                  ...sh,
+                  rot: absolute
+                    ? deltaOrAbsolute
+                    : (((sh.rot + deltaOrAbsolute) % 360) + 360) % 360,
+                }
+              : sh,
+          ),
+        };
+        past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+        future.current = [];
+        return next;
+      });
+    },
+    [selected],
+  );
+
+  const rotatable = diagram.shapes.filter(
+    (s) => selected.has(s.id) && (s.k === 'player' || s.k === 'kit'),
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
@@ -109,6 +138,9 @@ export default function App() {
       }
       if (e.key.toLowerCase() === 's') setTool({ kind: 'select' });
       if (e.key.toLowerCase() === 'l') setTool({ kind: 'text' });
+      // Square brackets turn the selection, the way most editors do.
+      if (e.key === '[') { e.preventDefault(); rotateSelected(-ROTATE_STEP); }
+      if (e.key === ']') { e.preventDefault(); rotateSelected(ROTATE_STEP); }
       // First letter of what the line stands for. With lines selected this
       // retypes them, which is the same verb applied to what is in hand.
       const spec = LINE_SPECS.find((sp) => sp.key === e.key.toLowerCase());
@@ -119,7 +151,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selected, diagram, commitNow, applyLine]);
+  }, [undo, redo, selected, diagram, commitNow, applyLine, rotateSelected]);
 
   const setSurface = (patch: Partial<Diagram['surface']>) =>
     commitNow({ ...diagram, surface: { ...diagram.surface, ...patch } });
@@ -200,6 +232,7 @@ export default function App() {
       id: `f${Date.now().toString(36)}-${n++}`,
       team: templateTeam,
       number: p.number,
+      rot: 0,
       x: Math.round(p.fx * box.w),
       y: Math.round(p.fy * box.h),
     }));
@@ -307,6 +340,21 @@ export default function App() {
                     {['Small', 'Medium', 'Large'][i]}
                   </button>
                 ))}
+              </div>
+            </section>
+          )}
+
+          {rotatable.length > 0 && (
+            <section>
+              <h2>Rotate</h2>
+              <div className="segmented">
+                <button onClick={() => rotateSelected(-ROTATE_STEP)} title="Turn left ( [ )">
+                  ↺ {ROTATE_STEP}°
+                </button>
+                <button onClick={() => rotateSelected(ROTATE_STEP)} title="Turn right ( ] )">
+                  ↻ {ROTATE_STEP}°
+                </button>
+                <button onClick={() => rotateSelected(0, true)}>Reset</button>
               </div>
             </section>
           )}

@@ -112,9 +112,9 @@ export function Canvas({
     if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
       const shape: Shape =
         tool.kind === 'player'
-          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, ...p }
+          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, ...p }
           : tool.kind === 'kit'
-            ? { k: 'kit', id: nextId('k'), item: tool.item, ...p }
+            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, ...p }
             : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[1], ...p };
       onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
       onSelect(new Set([shape.id]));
@@ -365,7 +365,12 @@ export function Canvas({
       ref={svgRef}
       className={`canvas tool-${tool.kind}`}
       viewBox={`0 0 ${box.w} ${box.h}`}
-      preserveAspectRatio="xMidYMid meet"
+      // Top-aligned, not centred. A short wide surface — the penalty box, or a
+      // landscape crop — is much shorter than the working area, and centring it
+      // left the diagram floating in the middle with dead space above it.
+      // Pointer coordinates come from the screen matrix, so they follow this
+      // without any adjustment.
+      preserveAspectRatio="xMidYMin meet"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -373,7 +378,18 @@ export function Canvas({
       role="application"
       aria-label="Diagram canvas"
     >
-      <SurfaceSvg surface={diagram.surface} />
+      {/* preserveAspectRatio scales and positions the user coordinate system;
+          it does NOT clip to the viewBox. The pitch is always drawn full length,
+          so on a cropped surface the rest of it bled into the spare element area
+          and "Box" showed the halfway line. Clip to the visible box. */}
+      <defs>
+        <clipPath id="surface-clip">
+          <rect x={0} y={0} width={box.w} height={box.h} />
+        </clipPath>
+      </defs>
+      <g clipPath="url(#surface-clip)">
+        <SurfaceSvg surface={diagram.surface} />
+      </g>
       {/* Lines under tokens, so an arrow never covers the player it points at. */}
       {lines.map((l) =>
         l.k === 'line' ? (
@@ -384,7 +400,7 @@ export function Canvas({
         s.k === 'player' ? (
           <PlayerMark key={s.id} shape={s} selected={selected.has(s.id)} colors={diagram.colors} />
         ) : s.k === 'kit' ? (
-          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} selected={selected.has(s.id)} />
+          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} rot={s.rot} selected={selected.has(s.id)} />
         ) : s.k === 'text' ? (
           <TextMark key={s.id} shape={s} selected={selected.has(s.id)} />
         ) : null,

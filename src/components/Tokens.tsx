@@ -27,6 +27,7 @@ export function PlayerToken({
   number,
   x,
   y,
+  rot = 0,
   selected,
   colors = DEFAULT_COLORS,
 }: {
@@ -34,6 +35,7 @@ export function PlayerToken({
   number: number;
   x: number;
   y: number;
+  rot?: number;
   selected?: boolean;
   colors?: { own: string; opp: string };
 }) {
@@ -64,7 +66,11 @@ export function PlayerToken({
   return (
     <g transform={`translate(${x} ${y})`} className="token">
       {selected && <circle r={r + 8} className="selRing" />}
-      {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
+      <g transform={`rotate(${rot})`}>
+        {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
+      </g>
+      {/* The number stays upright however the token is turned — a rotated
+          shirt number is unreadable, and it is the shape that carries facing. */}
       <text
         // A triangle is widest near its base, so the number sits below the
         // centroid where there is room for two digits.
@@ -137,11 +143,13 @@ export function KitMark({
   item,
   x,
   y,
+  rot = 0,
   selected,
 }: {
   item: string;
   x: number;
   y: number;
+  rot?: number;
   selected?: boolean;
 }) {
   const spec = equipmentSpec(item);
@@ -156,20 +164,58 @@ export function KitMark({
     switch (item) {
       case 'goal':
       case 'mini-goal': {
-        const d = h * 0.55;
+        // Drawn as a front elevation — posts, crossbar, netting and feet — which
+        // is how a goal is recognisable at this size. A plan view of one is just
+        // a rectangle with lines in it.
+        const frame = '#2a3038';
+        const mesh = '#2a3038';
+        const foot = h * 0.16;
+        const top = -h / 2;
+        const ground = h / 2 - foot;
+        const left = -w / 2;
+        const right = w / 2;
+        const cols = item === 'goal' ? 13 : 8;
+        const rows = 4;
         return (
           <>
-            <path d={`M${-w / 2},${h / 2} L${-w / 2 + d * 0.35},${-h / 2} L${w / 2 - d * 0.35},${-h / 2} L${w / 2},${h / 2} Z`} fill="#fff" fillOpacity={0.5} stroke={stroke} strokeWidth={2} strokeLinejoin="round" />
-            {Array.from({ length: 7 }, (_, i) => {
-              const t = (i + 1) / 8;
-              return <line key={`v${i}`} x1={-w / 2 + w * t} y1={h / 2} x2={-w / 2 + d * 0.35 + (w - d * 0.7) * t} y2={-h / 2} stroke={stroke} strokeWidth={0.7} strokeOpacity={0.5} />;
+            <rect
+              x={left}
+              y={top}
+              width={w}
+              height={ground - top}
+              fill="#fff"
+              fillOpacity={0.5}
+            />
+            {Array.from({ length: cols - 1 }, (_, i) => {
+              const x = left + (w * (i + 1)) / cols;
+              return (
+                <line key={`v${i}`} x1={x} y1={top} x2={x} y2={ground}
+                  stroke={mesh} strokeWidth={0.5} strokeOpacity={0.5} />
+              );
             })}
-            {Array.from({ length: 3 }, (_, i) => {
-              const t = (i + 1) / 4;
-              const inset = d * 0.35 * t;
-              return <line key={`h${i}`} x1={-w / 2 + inset} y1={h / 2 - h * t} x2={w / 2 - inset} y2={h / 2 - h * t} stroke={stroke} strokeWidth={0.7} strokeOpacity={0.5} />;
+            {Array.from({ length: rows - 1 }, (_, i) => {
+              const y = top + ((ground - top) * (i + 1)) / rows;
+              return (
+                <line key={`h${i}`} x1={left} y1={y} x2={right} y2={y}
+                  stroke={mesh} strokeWidth={0.5} strokeOpacity={0.5} />
+              );
             })}
-            <line x1={-w / 2} y1={h / 2} x2={w / 2} y2={h / 2} stroke={stroke} strokeWidth={2.6} />
+            {/* Posts and crossbar over the netting. */}
+            <path
+              d={`M${left},${ground} L${left},${top} L${right},${top} L${right},${ground}`}
+              fill="none"
+              stroke={frame}
+              strokeWidth={2.2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            {/* Ground line, then the feet the frame stands on. */}
+            <line x1={left} y1={ground} x2={right} y2={ground}
+              stroke={frame} strokeWidth={1.6} />
+            {[left + 2, right - 2].map((x) => (
+              <line key={x} x1={x} y1={ground} x2={x} y2={h / 2}
+                stroke={frame} strokeWidth={2} strokeLinecap="round" />
+            ))}
           </>
         );
       }
@@ -323,7 +369,7 @@ export function KitMark({
   return (
     <g transform={`translate(${x} ${y})`} className="token">
       {selected && <rect x={-w / 2 - 6} y={-h / 2 - 6} width={w + 12} height={h + 12} className="selRing" rx={5} />}
-      {body()}
+      <g transform={`rotate(${rot})`}>{body()}</g>
     </g>
   );
 }
@@ -389,6 +435,7 @@ export function PlayerMark({
       number={shape.number}
       x={shape.x}
       y={shape.y}
+      rot={shape.rot}
       selected={selected}
       colors={colors}
     />

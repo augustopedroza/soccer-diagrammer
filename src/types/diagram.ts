@@ -36,6 +36,8 @@ export interface PlayerShape {
   number: number;
   x: number;
   y: number;
+  /** Degrees clockwise. A rotated triangle shows which way a player faces. */
+  rot: number;
 }
 
 export interface LineShape {
@@ -67,6 +69,8 @@ export interface KitShape {
   item: string;
   x: number;
   y: number;
+  /** Degrees clockwise. */
+  rot: number;
 }
 
 export type Shape = PlayerShape | LineShape | KitShape | TextShape;
@@ -91,6 +95,8 @@ export interface Diagram {
  * coordinate can never exceed the longest a box can be.
  */
 export const MAX_COORD = 1000;
+
+export const ROTATE_STEP = 15;
 
 export const TEXT_SIZES = [22, 32, 46] as const;
 export const MAX_LABEL = 120;
