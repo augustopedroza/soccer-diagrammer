@@ -440,6 +440,10 @@ export function Canvas({
         },
         true,
       );
+      // The gesture is finished, so let go of it. Leaving the line selected
+      // kept three handles sitting on top of the players it had just been
+      // joined to, hiding the thing you were looking at.
+      onSelect(new Set());
     }
 
     if (drag.mode === 'rotate' || drag.mode === 'scale') onChange(diagram, true);
