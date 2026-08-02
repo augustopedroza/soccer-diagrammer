@@ -181,7 +181,10 @@ export function Canvas({
           lastTo: { ...p },
         };
         onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
-        onSelect(new Set([shape.id]));
+        // Deliberately NOT selected: the tool stays armed for the next line, and
+        // leaving it selected would make the next keystroke retype it instead of
+        // starting a new one.
+        onSelect(new Set());
         onToolUsed();
       }
     }

@@ -4,7 +4,7 @@ import { PlayerToken } from './components/Tokens';
 import { EQUIPMENT } from './data/equipment';
 import { COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
-import type { Crop, Diagram, Facing, Sport, SurfaceStyle } from './types/diagram';
+import type { Crop, Diagram, Facing, LineType, Sport, SurfaceStyle } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
 
@@ -56,6 +56,32 @@ export default function App() {
     });
   }, []);
 
+  // Lines in the current selection, so their type can be changed after drawing.
+  const selectedLines = diagram.shapes.filter(
+    (s): s is Extract<typeof s, { k: 'line' }> => s.k === 'line' && selected.has(s.id),
+  );
+
+  /**
+   * One verb for the four line types: retype what is selected, or arm the tool
+   * to draw a new one. Same from the palette and from the keyboard, so there is
+   * no second panel to keep in step.
+   */
+  const applyLine = useCallback(
+    (type: LineType) => {
+      if (selectedLines.length > 0) {
+        commitNow({
+          ...diagram,
+          shapes: diagram.shapes.map((sh) =>
+            sh.k === 'line' && selected.has(sh.id) ? { ...sh, type } : sh,
+          ),
+        });
+      } else {
+        setTool({ kind: 'line', type });
+      }
+    },
+    [diagram, selected, selectedLines.length, commitNow],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
@@ -78,28 +104,18 @@ export default function App() {
         setTool({ kind: 'select' });
         setSelected(new Set());
       }
-      if (e.key.toLowerCase() === 'v') setTool({ kind: 'select' });
+      if (e.key.toLowerCase() === 's') setTool({ kind: 'select' });
       // First letter of what the line stands for. With lines selected this
       // retypes them, which is the same verb applied to what is in hand.
       const spec = LINE_SPECS.find((sp) => sp.key === e.key.toLowerCase());
       if (spec && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
-        const lines = diagram.shapes.filter((sh) => sh.k === 'line' && selected.has(sh.id));
-        if (lines.length > 0) {
-          commitNow({
-            ...diagram,
-            shapes: diagram.shapes.map((sh) =>
-              sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: spec.type } : sh,
-            ),
-          });
-        } else {
-          setTool({ kind: 'line', type: spec.type });
-        }
+        applyLine(spec.type);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selected, diagram, commitNow]);
+  }, [undo, redo, selected, diagram, commitNow, applyLine]);
 
   const setSurface = (patch: Partial<Diagram['surface']>) =>
     commitNow({ ...diagram, surface: { ...diagram.surface, ...patch } });
@@ -130,11 +146,6 @@ export default function App() {
     setSelected(new Set());
     setNotice(res.dropped > 0 ? `Opened. ${res.dropped} unreadable shape(s) were ignored.` : 'Opened.');
   }
-
-  // Lines in the current selection, so their type can be changed after drawing.
-  const selectedLines = diagram.shapes.filter(
-    (s): s is Extract<typeof s, { k: 'line' }> => s.k === 'line' && selected.has(s.id),
-  );
 
   const isTool = (t: Tool) =>
     tool.kind === t.kind &&
@@ -180,47 +191,6 @@ export default function App() {
 
       <div className="work">
         <aside className="palette">
-          {selectedLines.length > 0 && (
-            <section>
-              <h2>
-                {selectedLines.length > 1
-                  ? `${selectedLines.length} lines selected`
-                  : 'Selected line'}
-              </h2>
-              <p className="hint">Change what it means — the stroke follows.</p>
-              {LINE_SPECS.map((sp) => {
-                const all = selectedLines.every((l) => l.type === sp.type);
-                return (
-                  <button
-                    key={sp.type}
-                    className={`lineBtn${all ? ' on' : ''}`}
-                    onClick={() =>
-                      commitNow({
-                        ...diagram,
-                        shapes: diagram.shapes.map((sh) =>
-                          sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: sp.type } : sh,
-                        ),
-                      })
-                    }
-                  >
-                    <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
-                      <path
-                        d={sp.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
-                        fill="none"
-                        stroke={sp.stroke}
-                        strokeWidth={2}
-                        strokeDasharray={sp.dash ? '7 5' : undefined}
-                      />
-                      <path d="M0,0 L-8,-4 L-8,4 Z" fill={sp.stroke} transform="translate(56 8)" />
-                    </svg>
-                    <span>{sp.label}</span>
-                    <kbd className="lineKey">{sp.key.toUpperCase()}</kbd>
-                  </button>
-                );
-              })}
-            </section>
-          )}
-
           <section>
             <h2>Surface</h2>
             <div className="segmented">
@@ -251,6 +221,44 @@ export default function App() {
                 </button>
               ))}
             </div>
+          </section>
+
+          <section>
+            <h2>Lines</h2>
+            <p className="hint">
+              Drag from where it starts to where it ends. Hold Shift to curve. Press
+              the letter to pick a line, or to retype whatever is selected. S returns
+              to select.
+            </p>
+            {LINE_SPECS.map((s) => (
+              <button
+                key={s.type}
+                className={`lineBtn${
+                  selectedLines.length > 0
+                    ? selectedLines.every((l) => l.type === s.type)
+                      ? ' on'
+                      : ''
+                    : isTool({ kind: 'line', type: s.type })
+                      ? ' on'
+                      : ''
+                }`}
+                onClick={() => applyLine(s.type)}
+                title={s.meaning}
+              >
+                <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
+                  <path
+                    d={s.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
+                    fill="none"
+                    stroke={s.stroke}
+                    strokeWidth={2}
+                    strokeDasharray={s.dash ? '7 5' : undefined}
+                  />
+                  <path d="M0,0 L-8,-4 L-8,4 Z" fill={s.stroke} transform="translate(56 8)" />
+                </svg>
+                <span>{s.label}</span>
+                <kbd className="lineKey">{s.key.toUpperCase()}</kbd>
+              </button>
+            ))}
           </section>
 
           <section>
@@ -313,39 +321,10 @@ export default function App() {
           </section>
 
           <section>
-            <h2>Lines</h2>
-            <p className="hint">
-              Drag from where it starts to where it ends. Hold Shift to curve. Press
-              the letter to pick a line, or to retype whatever is selected. V returns
-              to select.
-            </p>
-            {LINE_SPECS.map((s) => (
-              <button
-                key={s.type}
-                className={`lineBtn${isTool({ kind: 'line', type: s.type }) ? ' on' : ''}`}
-                onClick={() => setTool({ kind: 'line', type: s.type })}
-                title={s.meaning}
-              >
-                <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
-                  <path
-                    d={s.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
-                    fill="none"
-                    stroke={s.stroke}
-                    strokeWidth={2}
-                    strokeDasharray={s.dash ? '7 5' : undefined}
-                  />
-                  <path d="M0,0 L-8,-4 L-8,4 Z" fill={s.stroke} transform="translate(56 8)" />
-                </svg>
-                <span>{s.label}</span>
-                <kbd className="lineKey">{s.key.toUpperCase()}</kbd>
-              </button>
-            ))}
-          </section>
-
-          <section>
             <h2>Edit</h2>
             <button onClick={() => setTool({ kind: 'select' })} aria-pressed={tool.kind === 'select'}>
               Select / move
+              <kbd className="lineKey">S</kbd>
             </button>
             <button
               disabled={selected.size === 0}
@@ -384,10 +363,13 @@ export default function App() {
             selected={selected}
             onSelect={setSelected}
             onChange={change}
-            // Back to select after anything is placed. Staying armed meant the
-            // next click — usually meant to pick that player up — dropped a
-            // second one on top of it.
-            onToolUsed={() => setTool({ kind: 'select' })}
+            // Placement tools disarm: staying armed meant the next click, usually
+            // meant to pick that player up, dropped a second one on top of it. A
+            // line needs a drag, so it cannot misfire and stays armed for the
+            // next one.
+            onToolUsed={() =>
+              setTool((t) => (t.kind === 'player' || t.kind === 'kit' ? { kind: 'select' } : t))
+            }
           />
         </main>
 

@@ -123,25 +123,49 @@ export function trimToTokens(
 }
 
 /**
- * A wavy stroke for dribbles, generated along the chord.
+ * A wavy stroke for dribbles.
  *
- * Built from the resolved geometry rather than an SVG filter so it exports and
- * prints identically to how it appears on screen.
+ * The wave is driven by ARC LENGTH, not by the curve parameter. Driving it by
+ * `t` — and deriving its frequency from the straight-line distance, as this did
+ * first — means a bowed line is much longer than its chord, so the same number
+ * of oscillations gets stretched across it and a strongly curved dribble
+ * flattens into a lazy S instead of staying a dribble.
+ *
+ * Built from resolved geometry rather than an SVG filter, so it exports and
+ * prints exactly as it appears.
  */
 export function wavyPath(a: Point, c: Point, b: Point): string {
-  const steps = Math.max(8, Math.round(dist(a, b) / 16));
-  const amp = 7;
-  const pts: string[] = [];
-  for (let i = 0; i <= steps; i++) {
+  const WAVELENGTH = 24; // surface units per full oscillation
+  const AMP = 7;
+
+  // Sample finely enough for the longest the curve could be.
+  const bound = dist(a, c) + dist(c, b);
+  const steps = Math.max(24, Math.min(480, Math.round(bound / 3)));
+
+  const samples: { p: Point; t: number; s: number }[] = [];
+  let run = 0;
+  let prev = pointOnCurve(a, c, b, 0);
+  samples.push({ p: prev, t: 0, s: 0 });
+  for (let i = 1; i <= steps; i++) {
     const t = i / steps;
     const p = pointOnCurve(a, c, b, t);
-    const ang = (angleOnCurve(a, c, b, t) * Math.PI) / 180;
-    // Offset perpendicular to the local tangent, tapering to zero at both ends
-    // so the stroke meets the token and the arrow head cleanly.
-    const taper = Math.sin(Math.PI * t);
-    const off = Math.sin(t * steps * 0.9) * amp * taper;
-    pts.push(`${(p.x - Math.sin(ang) * off).toFixed(1)},${(p.y + Math.cos(ang) * off).toFixed(1)}`);
+    run += dist(p, prev);
+    samples.push({ p, t, s: run });
+    prev = p;
   }
+  const total = run || 1;
+
+  // Whole oscillations only, so the stroke starts and ends on the centre line
+  // however long it is.
+  const waves = Math.max(2, Math.round(total / WAVELENGTH));
+
+  const pts = samples.map(({ p, t, s }) => {
+    const ang = (angleOnCurve(a, c, b, t) * Math.PI) / 180;
+    const u = s / total;
+    // Taper to zero at both ends so it meets the token and the arrow head.
+    const off = Math.sin(u * waves * Math.PI * 2) * AMP * Math.sin(Math.PI * u);
+    return `${(p.x - Math.sin(ang) * off).toFixed(1)},${(p.y + Math.cos(ang) * off).toFixed(1)}`;
+  });
   return `M${pts.join(' L')}`;
 }
 
