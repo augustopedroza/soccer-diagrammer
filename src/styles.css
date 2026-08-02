@@ -37,7 +37,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .titleInput::placeholder { color: rgba(255,255,255,.6); }
 
-.notice { padding: 8px 16px; background: #fff8e7; border-bottom: 1px solid #e8d5a8; font-size: 13px; }
+.notice {
+  padding: 8px 16px; background: #fff8e7; border-bottom: 1px solid #e8d5a8;
+  font-size: 13px; cursor: pointer;
+}
 
 /* Three columns inside a fixed shell. `min-height: 0` is what actually keeps the
    canvas in bounds: without it the flex item refuses to shrink below its

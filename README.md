@@ -40,7 +40,7 @@ attackers, not the 2, 6, 8 and 10, so those go down blank.
 - **Number a player**: double-click it and press Enter, or type with it selected
   — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
 - **Undo / redo**: `⌘Z` and `⇧⌘Z`. Copy, cut, paste and duplicate are `⌘C`,
-  `⌘X`, `⌘V`, `⌘D`.
+  `⌘X`, `⌘V`, `⌘D`. Open, save and print are `⌘O`, `⌘S` and `⌘P`.
 
 Templates drop a small-sided game (1v1 up to 5v5, or any N v M) or a full
 starting XI in one of five shapes. Labels, equipment and a printable sheet round

@@ -62,6 +62,11 @@ function Panel({
 /** How long a typed 1 waits to see whether it is really a 10 or an 11. */
 const NUMBER_CHASE_MS = 900;
 
+/** The modifier this keyboard actually has, for the tooltips to name. */
+const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.userAgent)
+  ? '⌘'
+  : 'Ctrl+';
+
 /** A side is 1..11 players; anything else keeps the previous count. */
 const sideCount = (raw: string, was: number): number => {
   const n = Number(raw);
@@ -218,6 +223,31 @@ export default function App() {
     [selected],
   );
 
+  /**
+   * Notices clear themselves.
+   *
+   * They report something that has already happened — saved, opened, moved — so
+   * once it has been read there is nothing to act on, and a banner that stays
+   * put shifts the whole page down until the next one replaces it. Long enough
+   * to read a refusal; clickable if it is in the way.
+   */
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  /** The three file verbs, so the toolbar and the keyboard call one thing each. */
+  const openDialog = useCallback(() => fileInput.current?.click(), []);
+
+  const saveFile = useCallback(() => {
+    const name = filename(diagram, 'json');
+    download(name, serialize(diagram), 'application/json');
+    setNotice(`Saved ${name}`);
+  }, [diagram]);
+
+  const printSheet = useCallback(() => window.print(), []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
@@ -225,6 +255,28 @@ export default function App() {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
         return;
+      }
+      // The file verbs sit ABOVE the typing guard on purpose: they should work
+      // while the title field has focus, and each one has to take the key off
+      // the browser, which would otherwise save the page, open a file into the
+      // tab, or print without the app's own print setup.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === 'o') {
+          e.preventDefault();
+          openDialog();
+          return;
+        }
+        if (k === 's') {
+          e.preventDefault();
+          saveFile();
+          return;
+        }
+        if (k === 'p') {
+          e.preventDefault();
+          printSheet();
+          return;
+        }
       }
       if (typing) return;
       if ((e.key === 'Backspace' || e.key === 'Delete') && selected.size > 0) {
@@ -237,10 +289,9 @@ export default function App() {
         setSelected(new Set(diagram.shapes.map((s) => s.id)));
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+        // No notice: the paste is the feedback, and a banner for something that
+        // did not change the drawing is just something else to read.
         clipboard.current = diagram.shapes.filter((sh) => selected.has(sh.id));
-        if (clipboard.current.length > 0) {
-          setNotice(`Copied ${clipboard.current.length}.`);
-        }
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x') {
         clipboard.current = diagram.shapes.filter((sh) => selected.has(sh.id));
@@ -301,7 +352,19 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selected, diagram, commitNow, applyLine, rotateSelected, pasteShapes]);
+  }, [
+    undo,
+    redo,
+    selected,
+    diagram,
+    commitNow,
+    applyLine,
+    rotateSelected,
+    pasteShapes,
+    openDialog,
+    saveFile,
+    printSheet,
+  ]);
 
   /**
    * Changes the surface, keeping everything on it reachable.
@@ -509,14 +572,12 @@ export default function App() {
           aria-label="Diagram title"
         />
         <div className="spacer" />
-        <button onClick={undo} title="Undo (⌘Z)">Undo</button>
-        <button onClick={redo} title="Redo (⇧⌘Z)">Redo</button>
-        <button onClick={() => fileInput.current?.click()}>Open</button>
-        <button onClick={() => { download(filename(diagram, 'json'), serialize(diagram), 'application/json'); setNotice(`Saved ${filename(diagram, 'json')}`); }}>
-          Save
-        </button>
+        <button onClick={undo} title={`Undo (${MOD}Z)`}>Undo</button>
+        <button onClick={redo} title={`Redo (⇧${MOD}Z)`}>Redo</button>
+        <button onClick={openDialog} title={`Open (${MOD}O)`}>Open</button>
+        <button onClick={saveFile} title={`Save (${MOD}S)`}>Save</button>
         <button className="primary" onClick={exportSvg}>Export image</button>
-        <button onClick={() => window.print()}>Print</button>
+        <button onClick={printSheet} title={`Print (${MOD}P)`}>Print</button>
         <input
           ref={fileInput}
           type="file"
@@ -530,7 +591,11 @@ export default function App() {
         />
       </header>
 
-      {notice && <div className="notice">{notice}</div>}
+      {notice && (
+        <div className="notice" role="status" onClick={() => setNotice(null)} title="Dismiss">
+          {notice}
+        </div>
+      )}
 
       <div className="work">
         <aside className="palette">

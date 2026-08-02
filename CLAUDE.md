@@ -110,6 +110,13 @@ prints. `confineToBox()` runs on every surface change and reports what it moved.
 **Every tool disarms after use.** A tool that stays armed turns the next click —
 usually meant to pick up what you just made — into another one of the same thing.
 
+**The file shortcuts sit above the typing guard.** `⌘O`, `⌘S` and `⌘P` are
+handled before the `return` that ignores keys typed into an input: they should
+work while the title field has focus, and each has to be taken off the browser,
+which would otherwise save the page, open a file into the tab, or print without
+the app's own setup. Everything else stays below that guard, or typing a title
+would renumber players and retype lines.
+
 **Validate imports, never trust them.** `src/lib/file.ts` is the only untrusted
 input: size-capped, shape-checked, every enum and id validated, unknown values
 dropped and counted, colours matched against literal hex because they go
