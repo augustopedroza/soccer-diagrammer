@@ -17,6 +17,7 @@ import {
 } from '../src/lib/geometry';
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
+import { FORMATIONS, placements } from '../src/data/formations';
 import type { Diagram } from '../src/types/diagram';
 
 function withPlayers(): Diagram {
@@ -256,6 +257,76 @@ describe('labels', () => {
     const long = textBox({ text: 'A much longer label', size: 32 });
     expect(long.w).toBeGreaterThan(short.w);
     expect(long.h).toBe(short.h);
+  });
+});
+
+describe('formations', () => {
+  it('gives every shape eleven players, numbered 1-11 once each', () => {
+    for (const f of FORMATIONS) {
+      const nums = f.spots.map((p) => p.number).sort((a, b) => a - b);
+      expect(nums, f.id).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    }
+  });
+
+  it('keeps every player on the field', () => {
+    for (const f of FORMATIONS) {
+      for (const p of f.spots) {
+        expect(p.fx, `${f.id} #${p.number}`).toBeGreaterThan(0.05);
+        expect(p.fx, `${f.id} #${p.number}`).toBeLessThan(0.95);
+        expect(p.fy, `${f.id} #${p.number}`).toBeGreaterThan(0.2);
+        expect(p.fy, `${f.id} #${p.number}`).toBeLessThan(0.98);
+      }
+    }
+  });
+
+  it('always plays the 8 to the right of the 10', () => {
+    for (const f of FORMATIONS) {
+      const at = (n: number) => f.spots.find((p) => p.number === n)!;
+      expect(at(8).fx, `${f.id}`).toBeGreaterThan(at(10).fx);
+    }
+  });
+
+  it('puts the 6 behind and between them wherever the midfield is a triangle', () => {
+    const triangles = FORMATIONS.filter((f) => f.midfield === 'triangle');
+    expect(triangles.length).toBeGreaterThan(0);
+    for (const f of triangles) {
+      const at = (n: number) => f.spots.find((p) => p.number === n)!;
+      const [eight, ten, six] = [at(8), at(10), at(6)];
+      expect(six.fy, `${f.id}: 6 behind`).toBeGreaterThan(Math.max(eight.fy, ten.fy));
+      expect(six.fx, `${f.id}: 6 between`).toBeGreaterThanOrEqual(ten.fx);
+      expect(six.fx, `${f.id}: 6 between`).toBeLessThanOrEqual(eight.fx);
+    }
+  });
+
+  it('keeps the double pivot behind its 10', () => {
+    // The one shape where the rule above cannot hold: 6 and 8 sit side by side
+    // and the 10 plays in front of them.
+    for (const f of FORMATIONS.filter((x) => x.midfield === 'double-pivot')) {
+      const at = (n: number) => f.spots.find((p) => p.number === n)!;
+      expect(at(6).fy, f.id).toBeGreaterThan(at(10).fy);
+      expect(at(8).fy, f.id).toBeGreaterThan(at(10).fy);
+    }
+  });
+
+  it('puts the keeper deepest and behind the defence', () => {
+    for (const f of FORMATIONS) {
+      const keeper = f.spots.find((p) => p.number === 1)!;
+      const outfield = f.spots.filter((p) => p.number !== 1);
+      expect(keeper.fy, f.id).toBeGreaterThan(Math.max(...outfield.map((p) => p.fy)));
+    }
+  });
+
+  it('mirrors the opposition end to end and side to side', () => {
+    const f = FORMATIONS[0];
+    const own = placements(f, 'own');
+    const opp = placements(f, 'opp');
+    // The opposition keeper is at the far end, not stacked on ours.
+    const ownGk = own.find((p) => p.number === 1)!;
+    const oppGk = opp.find((p) => p.number === 1)!;
+    expect(oppGk.fy).toBeCloseTo(1 - ownGk.fy);
+    for (let i = 0; i < own.length; i++) {
+      expect(opp[i].fx).toBeCloseTo(1 - own[i].fx);
+    }
   });
 });
 

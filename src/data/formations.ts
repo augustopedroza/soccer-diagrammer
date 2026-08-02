@@ -1,67 +1,143 @@
 import type { Team } from '../types/diagram';
 
 /**
- * Starting shapes, as rows of shirt numbers from the back line forward.
+ * Starting shapes, as explicit positions rather than tidy rows.
  *
- * Numbers follow the usual continental convention — 1 in goal, 2 and 3 the full
- * backs, 4 and 5 centre backs, 6 holding, 7 and 11 wide, 9 centre forward, 10
- * between the lines. Each row reads left to right as the viewer sees it.
+ * Rows were the wrong model: a real shape is staggered. In a 4-3-3 the centre
+ * backs sit deeper than the full backs, and the midfield is a triangle, not a
+ * line. Interpolating evenly spaced bands produced something that looked like a
+ * table of players rather than a team.
  *
- * A template is a starting point, not a prescription: everything it drops is an
- * ordinary player token you can move, delete or renumber afterwards.
+ * Two rules hold across every shape here:
+ *   - the 8 plays right and the 10 plays left, wherever both appear;
+ *   - the 6 sits behind them and between them.
+ *
+ * `fx` runs 0..1 left to right as drawn; `fy` runs 0..1 from the far goal to
+ * your own. A template is a starting point — everything it drops is an ordinary
+ * token you can move, delete or renumber.
  */
+export interface Placement {
+  number: number;
+  fx: number;
+  fy: number;
+}
+
 export interface Formation {
   id: string;
   label: string;
-  /** Outfield rows, back to front. The goalkeeper is added separately. */
-  rows: number[][];
+  /**
+   * How the central midfield is built.
+   *
+   * `triangle` is the 6 behind a 10 and an 8. `double-pivot` is the 6 and 8
+   * side by side with the 10 ahead of them — there the 10 is the furthest
+   * forward of the three by definition, so the "6 between 10 and 8" rule
+   * cannot apply and is not asserted.
+   */
+  midfield: 'triangle' | 'double-pivot';
+  spots: Placement[];
 }
 
-export const FORMATIONS: Formation[] = [
-  { id: '4-3-3', label: '4-3-3', rows: [[3, 5, 4, 2], [8, 6, 10], [11, 9, 7]] },
-  { id: '4-4-2', label: '4-4-2', rows: [[3, 5, 4, 2], [11, 8, 6, 7], [10, 9]] },
-  { id: '4-2-3-1', label: '4-2-3-1', rows: [[3, 5, 4, 2], [6, 8], [11, 10, 7], [9]] },
-  { id: '4-1-4-1', label: '4-1-4-1', rows: [[3, 5, 4, 2], [6], [11, 8, 10, 7], [9]] },
-  { id: '3-5-2', label: '3-5-2', rows: [[5, 4, 6], [3, 8, 10, 2], [11, 9]] },
+const GK: Placement = { number: 1, fx: 0.5, fy: 0.93 };
+
+/** Back four: centre backs deep, full backs pushed on. */
+const BACK_FOUR: Placement[] = [
+  { number: 5, fx: 0.34, fy: 0.85 },
+  { number: 4, fx: 0.66, fy: 0.85 },
+  { number: 3, fx: 0.14, fy: 0.72 },
+  { number: 2, fx: 0.86, fy: 0.72 },
 ];
 
-/** Depth of each band, as a fraction of the box measured from the own goal. */
-const KEEPER_DEPTH = 0.94;
-const BACK_DEPTH = 0.78;
-const FRONT_DEPTH = 0.3;
-
-export interface Placement {
-  number: number;
-  /** 0..1 across the box, left to right as drawn. */
-  fx: number;
-  /** 0..1 down the box, 0 at the top. */
-  fy: number;
-}
+export const FORMATIONS: Formation[] = [
+  {
+    id: '4-3-3',
+    midfield: 'triangle',
+    label: '4-3-3',
+    spots: [
+      GK,
+      ...BACK_FOUR,
+      { number: 6, fx: 0.5, fy: 0.66 },
+      { number: 10, fx: 0.36, fy: 0.5 },
+      { number: 8, fx: 0.66, fy: 0.53 },
+      { number: 11, fx: 0.13, fy: 0.35 },
+      { number: 9, fx: 0.5, fy: 0.33 },
+      { number: 7, fx: 0.88, fy: 0.35 },
+    ],
+  },
+  {
+    id: '4-4-2',
+    midfield: 'triangle',
+    label: '4-4-2',
+    spots: [
+      GK,
+      ...BACK_FOUR,
+      { number: 11, fx: 0.13, fy: 0.55 },
+      { number: 6, fx: 0.38, fy: 0.6 },
+      { number: 8, fx: 0.64, fy: 0.55 },
+      { number: 7, fx: 0.88, fy: 0.55 },
+      { number: 10, fx: 0.38, fy: 0.34 },
+      { number: 9, fx: 0.62, fy: 0.32 },
+    ],
+  },
+  {
+    id: '4-2-3-1',
+    midfield: 'double-pivot',
+    label: '4-2-3-1',
+    spots: [
+      GK,
+      ...BACK_FOUR,
+      { number: 6, fx: 0.38, fy: 0.64 },
+      { number: 8, fx: 0.64, fy: 0.62 },
+      { number: 11, fx: 0.13, fy: 0.42 },
+      { number: 10, fx: 0.5, fy: 0.45 },
+      { number: 7, fx: 0.88, fy: 0.42 },
+      { number: 9, fx: 0.5, fy: 0.28 },
+    ],
+  },
+  {
+    id: '4-1-4-1',
+    midfield: 'triangle',
+    label: '4-1-4-1',
+    spots: [
+      GK,
+      ...BACK_FOUR,
+      { number: 6, fx: 0.5, fy: 0.68 },
+      { number: 11, fx: 0.13, fy: 0.48 },
+      { number: 10, fx: 0.37, fy: 0.5 },
+      { number: 8, fx: 0.65, fy: 0.48 },
+      { number: 7, fx: 0.88, fy: 0.48 },
+      { number: 9, fx: 0.5, fy: 0.3 },
+    ],
+  },
+  {
+    id: '3-5-2',
+    midfield: 'triangle',
+    label: '3-5-2',
+    spots: [
+      GK,
+      { number: 5, fx: 0.28, fy: 0.84 },
+      { number: 4, fx: 0.5, fy: 0.87 },
+      { number: 3, fx: 0.72, fy: 0.84 },
+      { number: 11, fx: 0.1, fy: 0.6 },
+      { number: 2, fx: 0.9, fy: 0.6 },
+      { number: 6, fx: 0.5, fy: 0.66 },
+      { number: 10, fx: 0.36, fy: 0.5 },
+      { number: 8, fx: 0.66, fy: 0.52 },
+      { number: 9, fx: 0.42, fy: 0.3 },
+      { number: 7, fx: 0.6, fy: 0.32 },
+    ],
+  },
+];
 
 /**
  * Positions for one team, as fractions of the visible box.
  *
- * Your team attacks up the page, so its goalkeeper sits at the bottom and the
- * shape builds upward. The opposition is the same shape mirrored, which is what
- * makes two templates on one pitch read as a match rather than as two teams
- * facing the same way.
+ * Your team attacks up the page, so its keeper sits at the bottom. The
+ * opposition is the same shape turned end to end, which is what makes two
+ * templates on one pitch read as a match rather than as two teams facing the
+ * same way. Mirroring both axes keeps each team's own left and right correct
+ * from its own point of view.
  */
 export function placements(formation: Formation, team: Team): Placement[] {
-  const out: Placement[] = [{ number: 1, fx: 0.5, fy: KEEPER_DEPTH }];
-
-  const bands = formation.rows.length;
-  formation.rows.forEach((row, i) => {
-    const t = bands === 1 ? 0 : i / (bands - 1);
-    const fy = BACK_DEPTH + (FRONT_DEPTH - BACK_DEPTH) * t;
-    row.forEach((number, j) => {
-      // Inset from the touchlines so wide players are not drawn on the line.
-      const fx = row.length === 1 ? 0.5 : 0.12 + (0.76 * j) / (row.length - 1);
-      out.push({ number, fx, fy });
-    });
-  });
-
-  if (team === 'own') return out;
-  // Mirror end to end, and left to right with it, so numbering stays correct
-  // from that team's own point of view.
-  return out.map((p) => ({ ...p, fx: 1 - p.fx, fy: 1 - p.fy }));
+  if (team === 'own') return formation.spots;
+  return formation.spots.map((p) => ({ ...p, fx: 1 - p.fx, fy: 1 - p.fy }));
 }
