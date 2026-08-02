@@ -117,6 +117,14 @@ which would otherwise save the page, open a file into the tab, or print without
 the app's own setup. Everything else stays below that guard, or typing a title
 would renumber players and retype lines.
 
+**One editing box, not one per kind.** Double-click opens the same popover for a
+shirt number and for a label; only the width, the length cap and the commit rule
+differ. Two popovers would be two sets of focus and commit behaviour to keep in
+step for what is, to the coach, the same gesture. Note the interaction it
+created: the rail's label field auto-focuses when a single label is selected, and
+that effect runs *after* the popover takes focus — so it has to stand down while
+the popover is open, or the caret jumps to the rail mid-word.
+
 **Validate imports, never trust them.** `src/lib/file.ts` is the only untrusted
 input: size-capped, shape-checked, every enum and id validated, unknown values
 dropped and counted, colours matched against literal hex because they go

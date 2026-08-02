@@ -415,9 +415,15 @@ export default function App() {
   const [customSided, setCustomSided] = useState<SmallSided>({ own: 4, opp: 3 });
   /** A just-typed 1, waiting to see whether a 0 or a 1 follows it. */
   const numberBuffer = useRef<{ first: number; at: number } | null>(null);
-  /** The open shirt-number box: which player, where on screen, what is typed. */
-  const [numberEdit, setNumberEdit] = useState<
-    { id: string; x: number; y: number; value: string } | null
+  /**
+   * The box open on the drawing: what it is editing, where, and what is typed.
+   *
+   * One gesture for both: double-click a player to renumber it, a label to
+   * reword it. Two popovers would be two sets of focus and commit rules to keep
+   * in step for what is, to the coach, the same move.
+   */
+  const [edit, setEdit] = useState<
+    { id: string; kind: 'number' | 'text'; x: number; y: number; value: string } | null
   >(null);
   const labelInput = useRef<HTMLInputElement>(null);
   /** Kept in the app, not the system clipboard — nothing leaves the page. */
@@ -436,6 +442,10 @@ export default function App() {
    */
   const focusedLabel = useRef<string | null>(null);
   useEffect(() => {
+    // Not while the box on the drawing is open: this effect runs after the
+    // popover has taken focus, so it would pull the caret across to the rail
+    // mid-word.
+    if (edit) return;
     if (selectedLabels.length !== 1) {
       focusedLabel.current = null;
       return;
@@ -445,7 +455,7 @@ export default function App() {
     focusedLabel.current = id;
     labelInput.current?.focus();
     labelInput.current?.select();
-  }, [selectedLabels]);
+  }, [selectedLabels, edit]);
 
   function editLabels(patch: { text?: string; size?: number }) {
     commitNow({
@@ -520,10 +530,27 @@ export default function App() {
    * legitimate shirt here. Anything that is not a real shirt number is refused
    * outright — silently rounding 47 to 4 would be a worse answer than none.
    */
-  function commitNumberEdit() {
-    setNumberEdit((edit) => {
-      if (!edit) return null;
-      const raw = edit.value.trim();
+  function commitEdit() {
+    setEdit((open) => {
+      if (!open) return null;
+      const raw = open.value.trim();
+
+      if (open.kind === 'text') {
+        // Any wording is valid, including none: an empty label is still there
+        // and still selectable, exactly as it is from the rail's field.
+        setDiagram((prev) => {
+          past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+          future.current = [];
+          return {
+            ...prev,
+            shapes: prev.shapes.map((sh) =>
+              sh.k === 'text' && sh.id === open.id ? { ...sh, text: open.value.slice(0, MAX_LABEL) } : sh,
+            ),
+          };
+        });
+        return null;
+      }
+
       const n = raw === '' ? null : Number(raw);
       if (n === null || ALL_NUMBERS.includes(n)) {
         setDiagram((prev) => {
@@ -532,7 +559,7 @@ export default function App() {
           return {
             ...prev,
             shapes: prev.shapes.map((sh) =>
-              sh.k === 'player' && sh.id === edit.id ? { ...sh, number: n } : sh,
+              sh.k === 'player' && sh.id === open.id ? { ...sh, number: n } : sh,
             ),
           };
         });
@@ -850,39 +877,52 @@ export default function App() {
             // could not be hovered or clicked without first going back to Select.
             // Its keyboard shortcut re-arms it in one keystroke.
             onToolUsed={() => setTool({ kind: 'select' })}
-            onEditNumber={(id, at) => {
-              const p = diagram.shapes.find((s) => s.id === id);
-              setNumberEdit({
-                id,
-                x: at.x,
-                y: at.y,
-                value: p?.k === 'player' && p.number !== null ? String(p.number) : '',
-              });
+            onEditShape={(id, at) => {
+              const sh = diagram.shapes.find((s) => s.id === id);
+              if (sh?.k === 'player') {
+                setEdit({ id, kind: 'number', ...at, value: sh.number === null ? '' : String(sh.number) });
+              } else if (sh?.k === 'text') {
+                setEdit({ id, kind: 'text', ...at, value: sh.text });
+              } else {
+                return;
+              }
               setSelected(new Set([id]));
             }}
           />
-          {/* Renumbering happens on the player, not across the screen. Enter
-              finishes, Escape leaves the shirt as it was, and an empty box means
-              no number — which is a real answer here, not a cancelled edit. */}
-          {numberEdit && (
-            <div className="numberPop" style={{ left: numberEdit.x, top: numberEdit.y }}>
+          {/* Editing happens on the thing itself, not across the screen. Enter
+              finishes, Escape leaves it as it was, and an empty box is a real
+              answer — no number, or a label with no words — rather than a
+              cancelled edit. */}
+          {edit && (
+            <div
+              className={`numberPop${edit.kind === 'text' ? ' wide' : ''}`}
+              style={{ left: edit.x, top: edit.y }}
+            >
               <input
                 autoFocus
-                inputMode="numeric"
-                maxLength={2}
-                aria-label="Shirt number"
-                placeholder="—"
-                value={numberEdit.value}
+                inputMode={edit.kind === 'number' ? 'numeric' : 'text'}
+                maxLength={edit.kind === 'number' ? 2 : MAX_LABEL}
+                aria-label={edit.kind === 'number' ? 'Shirt number' : 'Label text'}
+                placeholder={edit.kind === 'number' ? '—' : 'Label text'}
+                value={edit.value}
                 onChange={(e) =>
-                  setNumberEdit((s) =>
-                    s ? { ...s, value: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) } : s,
+                  setEdit((s) =>
+                    s
+                      ? {
+                          ...s,
+                          value:
+                            s.kind === 'number'
+                              ? e.target.value.replace(/[^0-9]/g, '').slice(0, 2)
+                              : e.target.value.slice(0, MAX_LABEL),
+                        }
+                      : s,
                   )
                 }
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') commitNumberEdit();
-                  if (e.key === 'Escape') setNumberEdit(null);
+                  if (e.key === 'Enter') commitEdit();
+                  if (e.key === 'Escape') setEdit(null);
                 }}
-                onBlur={commitNumberEdit}
+                onBlur={commitEdit}
               />
             </div>
           )}

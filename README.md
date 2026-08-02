@@ -37,8 +37,9 @@ attackers, not the 2, 6, 8 and 10, so those go down blank.
 - **Select**: click, Shift-click to add, or drag a box on empty ground. Several
   things selected become one object: drag anywhere inside the frame to move them
   all, turn them by the handle above it, resize by a corner. `⌘A` selects all.
-- **Number a player**: double-click it and press Enter, or type with it selected
-  — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
+- **Edit in place**: double-click a player to renumber it or a label to reword
+  it, then Enter. Escape leaves it as it was. A selected player can also be
+  numbered by typing — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
 - **Undo / redo**: `⌘Z` and `⇧⌘Z`. Copy, cut, paste and duplicate are `⌘C`,
   `⌘X`, `⌘V`, `⌘D`. Open, save and print are `⌘O`, `⌘S` and `⌘P`.
 

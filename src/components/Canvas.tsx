@@ -228,7 +228,7 @@ export function Canvas({
   onSelect,
   onChange,
   onToolUsed,
-  onEditNumber,
+  onEditShape,
 }: {
   diagram: Diagram;
   tool: Tool;
@@ -236,8 +236,8 @@ export function Canvas({
   onSelect: (ids: ReadonlySet<string>) => void;
   onChange: (next: Diagram, commit: boolean) => void;
   onToolUsed: () => void;
-  /** Double-click on a player: edit its shirt number where the player is. */
-  onEditNumber?: (id: string, at: { x: number; y: number }) => void;
+  /** Double-click: edit that shape where it stands — a shirt number, a label. */
+  onEditShape?: (id: string, at: { x: number; y: number }) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -644,9 +644,9 @@ export function Canvas({
       onDoubleClick={(e) => {
         // Renumbering where the player is, rather than across the screen in a
         // panel. The first click of the pair has already selected it.
-        if (!onEditNumber || tool.kind !== 'select') return;
+        if (!onEditShape || tool.kind !== 'select') return;
         const hit = hitTest(diagram, toSurface(e), kitSize);
-        if (hit?.k === 'player') onEditNumber(hit.id, { x: e.clientX, y: e.clientY });
+        if (hit?.k === 'player' || hit?.k === 'text') onEditShape(hit.id, { x: e.clientX, y: e.clientY });
       }}
       role="application"
       aria-label="Diagram canvas"
