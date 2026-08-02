@@ -2,14 +2,37 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, deleteShapes, type Tool } from './components/Canvas';
 import { PlayerToken } from './components/Tokens';
 import { EQUIPMENT } from './data/equipment';
-import { FORMATIONS, placements, type Formation } from './data/formations';
-import { COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
+import {
+  FORMATIONS,
+  MAX_SIDE,
+  SMALL_SIDED,
+  placements,
+  sidedLabel,
+  smallSidedSpots,
+  type Formation,
+  type SmallSided,
+} from './data/formations';
+import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
+import { wavyPath } from './lib/geometry';
 import { surfaceBox } from './lib/surfaceBox';
 import { ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
+
+/**
+ * The dribble icon, ending flat on the arrow head's base at x=48 — the taper in
+ * `wavyPath` is what brings it in level with the head. The swing is damped to
+ * suit a 16-unit tall button; at full size it would fill the row edge to edge.
+ */
+const WAVY_ICON = wavyPath({ x: 2, y: 8 }, { x: 25, y: 8 }, { x: 48, y: 8 }, 4);
+
+/** A side is 1..11 players; anything else keeps the previous count. */
+const sideCount = (raw: string, was: number): number => {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 1 && n <= MAX_SIDE ? Math.round(n) : was;
+};
 
 export default function App() {
   const [diagram, setDiagram] = useState<Diagram>(emptyDiagram);
@@ -62,6 +85,11 @@ export default function App() {
   // Lines in the current selection, so their type can be changed after drawing.
   const selectedLines = diagram.shapes.filter(
     (s): s is Extract<typeof s, { k: 'line' }> => s.k === 'line' && selected.has(s.id),
+  );
+
+  // Players in the selection, so they can be numbered after being placed.
+  const selectedPlayers = diagram.shapes.filter(
+    (s): s is Extract<typeof s, { k: 'player' }> => s.k === 'player' && selected.has(s.id),
   );
 
   /**
@@ -248,6 +276,7 @@ export default function App() {
   }
 
   const [templateTeam, setTemplateTeam] = useState<Team>('own');
+  const [customSided, setCustomSided] = useState<SmallSided>({ own: 4, opp: 3 });
   const labelInput = useRef<HTMLInputElement>(null);
   /** Kept in the app, not the system clipboard — nothing leaves the page. */
   const clipboard = useRef<Shape[]>([]);
@@ -308,6 +337,48 @@ export default function App() {
       shapes: [...diagram.shapes.filter((s) => !(s.k === 'player' && s.team === templateTeam)), ...placed],
     });
     setSelected(new Set());
+  }
+
+  /**
+   * Drops a small-sided game: N of yours against M of theirs, both sides blank.
+   *
+   * Replaces every player, not just one team's — a 4v3 is a whole practice
+   * setup, and adding one on top of an existing eleven is never what was meant.
+   */
+  function applySmallSided(s: SmallSided) {
+    const box = surfaceBox(diagram.surface);
+    const stamp = Date.now().toString(36);
+    let n = 0;
+    const side = (count: number, team: Team): Shape[] =>
+      smallSidedSpots(count, team).map((p) => ({
+        k: 'player',
+        id: `s${stamp}-${n++}`,
+        team,
+        number: null,
+        rot: 0,
+        scale: 1,
+        x: Math.round(p.fx * box.w),
+        y: Math.round(p.fy * box.h),
+      }));
+    commitNow({
+      ...diagram,
+      shapes: [
+        ...diagram.shapes.filter((sh) => sh.k !== 'player'),
+        ...side(s.own, 'own'),
+        ...side(s.opp, 'opp'),
+      ],
+    });
+    setSelected(new Set());
+  }
+
+  /** Numbers, or clears, every player in the selection. */
+  function numberSelected(value: number | null) {
+    commitNow({
+      ...diagram,
+      shapes: diagram.shapes.map((sh) =>
+        sh.k === 'player' && selected.has(sh.id) ? { ...sh, number: value } : sh,
+      ),
+    });
   }
 
   const isTool = (t: Tool) =>
@@ -435,7 +506,11 @@ export default function App() {
               >
                 <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
                   <path
-                    d={s.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
+                    // The squiggle comes from the same function the canvas
+                    // draws with. Hand-written quadratics ended mid-oscillation,
+                    // so the stroke met the flat arrow head at an angle — the
+                    // icon disagreed with the mark it stands for.
+                    d={s.wavy ? WAVY_ICON : 'M2,8 L48,8'}
                     fill="none"
                     stroke={s.stroke}
                     strokeWidth={2}
@@ -510,6 +585,39 @@ export default function App() {
 
           <section>
             <h2>Edit</h2>
+            {/* Numbering happens on the board, not before it: a blank token
+                placed by a small-sided template becomes the 6 once the coach
+                decides it is the 6. */}
+            {selectedPlayers.length > 0 && (
+              <div className="shirtRow">
+                <div className="teamName">
+                  Shirt number{' '}
+                  <span>
+                    {selectedPlayers.length > 1
+                      ? `${selectedPlayers.length} selected`
+                      : 'selected player'}
+                  </span>
+                </div>
+                <div className="numRow">
+                  <button
+                    className={`shirtBtn${selectedPlayers.every((p) => p.number === null) ? ' on' : ''}`}
+                    onClick={() => numberSelected(null)}
+                    title="No number"
+                  >
+                    —
+                  </button>
+                  {ALL_NUMBERS.map((n) => (
+                    <button
+                      key={n}
+                      className={`shirtBtn${selectedPlayers.every((p) => p.number === n) ? ' on' : ''}`}
+                      onClick={() => numberSelected(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <button onClick={() => setTool({ kind: 'select' })} aria-pressed={tool.kind === 'select'}>
               Select / move
               <kbd className="lineKey">S</kbd>
@@ -560,17 +668,12 @@ export default function App() {
             selected={selected}
             onSelect={setSelected}
             onChange={change}
-            // Placement tools disarm: staying armed meant the next click, usually
-            // meant to pick that player up, dropped a second one on top of it. A
-            // line needs a drag, so it cannot misfire and stays armed for the
-            // next one.
-            onToolUsed={() => {
-              setTool((t) =>
-                t.kind === 'player' || t.kind === 'kit' || t.kind === 'text'
-                  ? { kind: 'select' }
-                  : t,
-              );
-            }}
+            // Every tool disarms once it has been used, lines included. Staying
+            // armed meant the next click — usually meant to pick up what had just
+            // been drawn — started another line instead, so a finished arrow
+            // could not be hovered or clicked without first going back to Select.
+            // Its keyboard shortcut re-arms it in one keystroke.
+            onToolUsed={() => setTool({ kind: 'select' })}
           />
         </main>
 
@@ -594,6 +697,55 @@ export default function App() {
 
           <section>
             <h2>Templates</h2>
+            <p className="hint">
+              Small-sided games: triangles against discs, both sides replaced.
+              They go down blank — number them below once a number means
+              something.
+            </p>
+            <div className="sidedGrid">
+              {SMALL_SIDED.map((s) => (
+                <button
+                  key={sidedLabel(s)}
+                  className="kitBtn"
+                  onClick={() => applySmallSided(s)}
+                  title={`${s.own} of yours against ${s.opp} opposition`}
+                >
+                  {sidedLabel(s)}
+                </button>
+              ))}
+            </div>
+            <div className="sidedCustom">
+              <label>
+                Mine
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_SIDE}
+                  value={customSided.own}
+                  onChange={(e) =>
+                    setCustomSided((c) => ({ ...c, own: sideCount(e.target.value, c.own) }))
+                  }
+                />
+              </label>
+              <span>v</span>
+              <label>
+                Theirs
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_SIDE}
+                  value={customSided.opp}
+                  onChange={(e) =>
+                    setCustomSided((c) => ({ ...c, opp: sideCount(e.target.value, c.opp) }))
+                  }
+                />
+              </label>
+              <button className="tmplBtn" onClick={() => applySmallSided(customSided)}>
+                Place {sidedLabel(customSided)}
+              </button>
+            </div>
+
+            <h2 className="sectionSplit">Full teams</h2>
             <div className="segmented">
               {TEAM_SPECS.map((t) => (
                 <button

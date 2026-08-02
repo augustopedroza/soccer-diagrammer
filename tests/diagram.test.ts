@@ -8,16 +8,22 @@ import {
   serialize,
 } from '../src/lib/file';
 import {
+  HEAD_GRAB,
+  LINE_GRAB,
+  PLAYER_RADIUS,
   bendFor,
   controlPoint,
+  hitTest,
   lineEnds,
+  lineGeometry,
   playerAt,
   resolveEnd,
   textBox,
+  transformed,
 } from '../src/lib/geometry';
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
-import { FORMATIONS, placements } from '../src/data/formations';
+import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
 import type { Diagram } from '../src/types/diagram';
 
 function withPlayers(): Diagram {
@@ -74,6 +80,106 @@ describe('anchoring', () => {
     const d = withPlayers();
     expect(playerAt(d, { x: 300, y: 700 })?.id).toBe('p1');
     expect(playerAt(d, { x: 300, y: 640 })).toBeUndefined();
+  });
+});
+
+describe('picking a line', () => {
+  const kitSize = (id: string) => {
+    const s = EQUIPMENT.find((e) => e.id === id);
+    return { x: s?.w ?? 24, y: s?.h ?? 24 };
+  };
+  const line = (d: Diagram) => d.shapes.find((s) => s.k === 'line')!;
+
+  it('draws the arrow head clear of the token it points at', () => {
+    const d = withPlayers();
+    const { head } = lineGeometry(d, line(d) as never);
+    // Outside the player's own hit radius, or the head is unclickable however
+    // wide its target is — the token under it wins first.
+    expect(Math.hypot(head.x - 600, head.y - 400)).toBeGreaterThan(PLAYER_RADIUS + 4);
+  });
+
+  it('selects the line from its arrow head', () => {
+    const d = withPlayers();
+    const { head } = lineGeometry(d, line(d) as never);
+    expect(hitTest(d, head, kitSize)?.id).toBe('l1');
+  });
+
+  it('gives the head a wider target than the stroke', () => {
+    const d = withPlayers();
+    const { head } = lineGeometry(d, line(d) as never);
+    // Perpendicular to a 45-degree chord, further out than the stroke tolerance
+    // but inside the head's own.
+    const off = (LINE_GRAB + HEAD_GRAB) / 2 / Math.SQRT2;
+    const beside = { x: head.x + off, y: head.y + off };
+    expect(hitTest(d, beside, kitSize)?.id).toBe('l1');
+  });
+
+  it('still lets the player win where the two overlap', () => {
+    const d = withPlayers();
+    expect(hitTest(d, { x: 600, y: 400 }, kitSize)?.id).toBe('p2');
+  });
+
+  it('misses when the pointer is nowhere near the stroke', () => {
+    const d = withPlayers();
+    expect(hitTest(d, { x: 300, y: 400 }, kitSize)).toBeUndefined();
+  });
+});
+
+describe('transforming a selection', () => {
+  const box = { w: 1000, h: 1200 };
+  const both = new Set(['p1', 'p2']);
+
+  it('turns the group about the pivot, not each token where it stands', () => {
+    const d = withPlayers();
+    const out = transformed(d.shapes, both, { x: 450, y: 550 }, 90, 1, box);
+    const at = (id: string) => out.find((s) => s.id === id) as { x: number; y: number; rot: number };
+    // A quarter turn clockwise about (450,550): (300,700) -> (300,400).
+    expect(at('p1').x).toBeCloseTo(300, 6);
+    expect(at('p1').y).toBeCloseTo(400, 6);
+    expect(at('p2').x).toBeCloseTo(600, 6);
+    expect(at('p2').y).toBeCloseTo(700, 6);
+    expect(at('p1').rot).toBeCloseTo(90, 6);
+  });
+
+  it('grows the group away from the pivot and scales each token with it', () => {
+    const d = withPlayers();
+    const out = transformed(d.shapes, both, { x: 450, y: 550 }, 0, 2, box);
+    const at = (id: string) => out.find((s) => s.id === id) as { x: number; y: number; scale: number };
+    expect(at('p1').x).toBeCloseTo(150, 6);
+    expect(at('p1').y).toBeCloseTo(850, 6);
+    expect(at('p1').scale).toBeCloseTo(2, 6);
+  });
+
+  it('leaves anything not selected exactly as it was', () => {
+    const d = withPlayers();
+    const out = transformed(d.shapes, new Set(['p1']), { x: 450, y: 550 }, 90, 2, box);
+    expect(out.find((s) => s.id === 'p2')).toEqual(d.shapes.find((s) => s.id === 'p2'));
+    expect(out.find((s) => s.id === 'p3')).toEqual(d.shapes.find((s) => s.id === 'p3'));
+  });
+
+  it('keeps an anchored line anchored, and grows its bow with it', () => {
+    const d = withPlayers();
+    const curved = {
+      ...d,
+      shapes: d.shapes.map((s) => (s.k === 'line' ? { ...s, bend: 30 } : s)),
+    };
+    const out = transformed(curved.shapes, new Set(['p1', 'p2', 'l1']), { x: 450, y: 550 }, 0, 2, box);
+    const l = out.find((s) => s.id === 'l1') as { from: unknown; bend: number };
+    // Still a reference: an anchored end follows its player rather than being
+    // rewritten to a point, or the line would come off the token it was joined to.
+    expect(l.from).toEqual({ ref: 'p1' });
+    expect(l.bend).toBeCloseTo(60, 6);
+  });
+
+  it('keeps the whole selection inside the surface', () => {
+    const d = withPlayers();
+    const out = transformed(d.shapes, both, { x: 450, y: 550 }, 0, 40, box);
+    for (const s of out) {
+      if (s.k === 'line') continue;
+      expect(s.x).toBeGreaterThanOrEqual(0);
+      expect(s.x).toBeLessThanOrEqual(box.w);
+      expect(s.y).toBeLessThanOrEqual(box.h);
+    }
   });
 });
 
@@ -360,6 +466,107 @@ describe('formations', () => {
     for (let i = 0; i < own.length; i++) {
       expect(opp[i].fx).toBeCloseTo(1 - own[i].fx);
     }
+  });
+});
+
+describe('small-sided games', () => {
+  it('offers only sides of one to eleven', () => {
+    for (const s of SMALL_SIDED) {
+      for (const n of [s.own, s.opp]) {
+        expect(n).toBeGreaterThanOrEqual(1);
+        expect(n).toBeLessThanOrEqual(MAX_SIDE);
+      }
+    }
+  });
+
+  it('places exactly the number of players asked for', () => {
+    for (let n = 1; n <= MAX_SIDE; n++) {
+      expect(smallSidedSpots(n, 'own')).toHaveLength(n);
+      expect(smallSidedSpots(n, 'opp')).toHaveLength(n);
+    }
+  });
+
+  it('keeps every player on the field', () => {
+    for (let n = 1; n <= MAX_SIDE; n++) {
+      for (const team of ['own', 'opp'] as const) {
+        for (const p of smallSidedSpots(n, team)) {
+          expect(p.fx).toBeGreaterThan(0.05);
+          expect(p.fx).toBeLessThan(0.95);
+          expect(p.fy).toBeGreaterThan(0.05);
+          expect(p.fy).toBeLessThan(0.95);
+        }
+      }
+    }
+  });
+
+  it('puts the two sides in opposite halves, so it reads as a game', () => {
+    for (let n = 1; n <= MAX_SIDE; n++) {
+      expect(smallSidedSpots(n, 'own').every((p) => p.fy > 0.5)).toBe(true);
+      expect(smallSidedSpots(n, 'opp').every((p) => p.fy < 0.5)).toBe(true);
+    }
+  });
+
+  it('staggers rather than lining players up, from three onwards', () => {
+    for (let n = 3; n <= MAX_SIDE; n++) {
+      const rows = new Set(smallSidedSpots(n, 'own').map((p) => p.fy));
+      expect(rows.size).toBeGreaterThan(1);
+    }
+  });
+
+  it('refuses to place a nonsense count, rather than an empty side', () => {
+    expect(smallSidedSpots(0, 'own')).toHaveLength(1);
+    expect(smallSidedSpots(99, 'own')).toHaveLength(MAX_SIDE);
+  });
+});
+
+describe('blank shirt numbers', () => {
+  const withBlank = (): Diagram => {
+    const d = emptyDiagram();
+    d.shapes = [
+      { k: 'player', id: 'b1', team: 'own', number: null, x: 100, y: 100, rot: 0, scale: 1 },
+      { k: 'player', id: 'b2', team: 'opp', number: 9, x: 200, y: 200, rot: 0, scale: 1 },
+    ];
+    return d;
+  };
+
+  it('round-trips a blank token', () => {
+    const r = parse(serialize(withBlank()));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.shapes).toEqual(withBlank().shapes);
+    expect(r.dropped).toBe(0);
+  });
+
+  it('treats an absent number as blank, not as a broken record', () => {
+    const raw = {
+      kind: FILE_KIND,
+      version: FILE_VERSION,
+      diagram: {
+        ...emptyDiagram(),
+        shapes: [{ k: 'player', id: 'x', team: 'own', x: 10, y: 10, rot: 0, scale: 1 }],
+      },
+    };
+    const r = parse(JSON.stringify(raw));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.dropped).toBe(0);
+    expect((r.diagram.shapes[0] as { number: number | null }).number).toBeNull();
+  });
+
+  it('still drops a number that is not a shirt number', () => {
+    const raw = {
+      kind: FILE_KIND,
+      version: FILE_VERSION,
+      diagram: {
+        ...emptyDiagram(),
+        shapes: [{ k: 'player', id: 'x', team: 'own', number: 47, x: 10, y: 10, rot: 0, scale: 1 }],
+      },
+    };
+    const r = parse(JSON.stringify(raw));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.diagram.shapes).toHaveLength(0);
+    expect(r.dropped).toBe(1);
   });
 });
 

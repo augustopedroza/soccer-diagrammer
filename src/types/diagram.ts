@@ -33,7 +33,14 @@ export interface PlayerShape {
   k: 'player';
   id: string;
   team: Team;
-  number: number;
+  /**
+   * Shirt number, or null for a blank token.
+   *
+   * Blank is a real state, not a missing value. A 4v3 has four attackers, not
+   * the 2, 6, 8 and 10 — numbering them would claim positions the practice does
+   * not specify.
+   */
+  number: number | null;
   x: number;
   y: number;
   /** Degrees clockwise. A rotated triangle shows which way a player faces. */

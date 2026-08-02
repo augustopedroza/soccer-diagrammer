@@ -1,17 +1,14 @@
 import { equipmentSpec } from '../data/equipment';
 import { DEFAULT_COLORS, inkOn, lineSpec } from '../data/notation';
 import {
+  HEAD_GRAB,
   LINE_GRAB,
-  angleOnCurve,
+  lineGeometry,
   textBox,
-  controlPoint,
-  lineEnds,
-  pointOnCurve,
-  trimToTokens,
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { isRef, type Diagram, type LineShape, type PlayerShape, type Team } from '../types/diagram';
+import { type Diagram, type LineShape, type PlayerShape, type Team } from '../types/diagram';
 
 /**
  * Player tokens.
@@ -33,7 +30,7 @@ export function PlayerToken({
   colors = DEFAULT_COLORS,
 }: {
   team: Team;
-  number: number;
+  number: number | null;
   x: number;
   y: number;
   rot?: number;
@@ -70,19 +67,25 @@ export function PlayerToken({
         {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
       </g>
       {/* The number stays upright however the token is turned — a rotated
-          shirt number is unreadable, and it is the shape that carries facing. */}
-      <text
-        // A triangle is widest near its base, so the number sits below the
-        // centroid where there is room for two digits.
-        y={team === 'own' ? 6 : 1}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill={inkOn(fill)}
-        fontSize={team === 'own' ? 17 : 22}
-        fontWeight={700}
-      >
-        {number}
-      </text>
+          shirt number is unreadable, and it is the shape that carries facing.
+          Blank tokens carry no text at all. */}
+      {number !== null && (
+        <text
+          // A triangle is widest near its base, so the number sits below the
+          // centroid where there is room for two digits. Both teams use the same
+          // size: the two shapes are read side by side, and a smaller number on
+          // one of them looks like a different kind of token rather than the
+          // same one in a different shirt.
+          y={team === 'own' ? 6 : 1}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={inkOn(fill)}
+          fontSize={22}
+          fontWeight={700}
+        >
+          {number}
+        </text>
+      )}
     </g>
   );
 }
@@ -108,17 +111,14 @@ export function LineMark({
   selected?: boolean;
 }) {
   const spec = lineSpec(line.type);
-  const { a, b } = lineEnds(diagram, line);
-  // Pull the ends back off any token they are attached to, or the arrow head
-  // vanishes underneath the player it is pointing at.
-  const trimmed = trimToTokens(a, b, isRef(line.from), isRef(line.to));
-  const c = controlPoint(trimmed.a, trimmed.b, line.bend);
-  const head = pointOnCurve(trimmed.a, c, trimmed.b, 1);
-  const angle = angleOnCurve(trimmed.a, c, trimmed.b, 1);
+  // Ends are pulled back off any token they are attached to, or the arrow head
+  // vanishes underneath the player it is pointing at. Same geometry the hit test
+  // uses, so what you can click is what you can see.
+  const { a: ta, b: tb, c, head, angle } = lineGeometry(diagram, line);
 
   const d = spec.wavy
-    ? wavyPath(trimmed.a, c, trimmed.b)
-    : `M${trimmed.a.x},${trimmed.a.y} Q${c.x},${c.y} ${trimmed.b.x},${trimmed.b.y}`;
+    ? wavyPath(ta, c, tb)
+    : `M${ta.x},${ta.y} Q${c.x},${c.y} ${tb.x},${tb.y}`;
 
   return (
     <g className="lineMark">
@@ -146,6 +146,10 @@ export function LineMark({
         strokeLinecap="round"
       />
       <ArrowHead at={head} angle={angle} fill={spec.stroke} />
+      {/* The head is a target of its own, and last so it sits above the stroke:
+          it is the end of the pass, which is the part of a line a coach reaches
+          for, and it is a fatter mark than the stroke behind it. */}
+      <circle className="lineHit" cx={head.x} cy={head.y} r={HEAD_GRAB} fill="transparent" />
     </g>
   );
 }

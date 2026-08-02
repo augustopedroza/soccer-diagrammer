@@ -131,6 +131,64 @@ export const FORMATIONS: Formation[] = [
 ];
 
 /**
+ * Small-sided games: N triangles against M discs.
+ *
+ * Nothing here is a formation — a 4v3 is a practice, not a shape, and the
+ * players in one are whoever is standing there. So they go down **unnumbered**;
+ * a number is something the coach adds when it means something.
+ */
+export interface SmallSided {
+  own: number;
+  opp: number;
+}
+
+export const MAX_SIDE = 11;
+
+export const SMALL_SIDED: SmallSided[] = [
+  { own: 1, opp: 1 },
+  { own: 2, opp: 1 },
+  { own: 2, opp: 2 },
+  { own: 3, opp: 2 },
+  { own: 3, opp: 3 },
+  { own: 4, opp: 3 },
+  { own: 4, opp: 4 },
+  { own: 5, opp: 4 },
+  { own: 5, opp: 5 },
+];
+
+export const sidedLabel = (s: SmallSided) => `${s.own}v${s.opp}`;
+
+/**
+ * Where N players of one side stand, as fractions of the visible box.
+ *
+ * Staggered rows rather than a line, deepest row first and carrying any odd
+ * player, so a 3 reads as two behind one rather than as three in a row. Your
+ * side fills the near half and the opposition the far one, which is what makes
+ * a small-sided box read as a game rather than as a queue.
+ */
+export function smallSidedSpots(n: number, team: Team): { fx: number; fy: number }[] {
+  const count = Math.max(1, Math.min(MAX_SIDE, Math.round(n)));
+  const rows = Math.min(3, Math.ceil(count / 2));
+  const per: number[] = [];
+  const base = Math.floor(count / rows);
+  let extra = count % rows;
+  for (let r = 0; r < rows; r++) {
+    per.push(base + (extra > 0 ? 1 : 0));
+    if (extra > 0) extra--;
+  }
+
+  const out: { fx: number; fy: number }[] = [];
+  for (let r = 0; r < rows; r++) {
+    const k = per[r];
+    const fy = rows === 1 ? 0.72 : 0.86 - r * (0.3 / (rows - 1));
+    for (let i = 0; i < k; i++) {
+      out.push({ fx: k === 1 ? 0.5 : 0.2 + (i * 0.6) / (k - 1), fy });
+    }
+  }
+  return team === 'own' ? out : out.map((p) => ({ fx: 1 - p.fx, fy: 1 - p.fy }));
+}
+
+/**
  * Positions for one team, as fractions of the visible box.
  *
  * Your team attacks up the page, so its keeper sits at the bottom. The

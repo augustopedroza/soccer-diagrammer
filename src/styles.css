@@ -124,10 +124,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .canvas.tool-player, .canvas.tool-kit { cursor: copy; }
 .canvas.tool-line { cursor: crosshair; }
 .selRing { fill: none; stroke: #2f80ed; stroke-width: 3; stroke-dasharray: 5 4; }
-.token { cursor: grab; }
-/* A line is selected by clicking but is not dragged as a whole — its ends and
-   its midpoint are — so it gets the pointer rather than the token's grab. */
-.canvas.tool-select .lineHit { cursor: pointer; }
+/* Scoped to the drawing. The same token markup is used for the palette's
+   preview icons, where a grab cursor promises a drag the button does not do. */
+.canvas .token { cursor: grab; }
+/* The same grab a token gets. A line is one more object on the drawing, and
+   giving it its own cursor made it read as a different kind of thing. */
+.canvas.tool-select .lineHit { cursor: grab; }
+/* Everything else in a line is decoration as far as the pointer is concerned.
+   The drawn stroke is painted ON TOP of the hit path, so without this it won
+   the hover and the cursor went back to default in the one place a coach is
+   most likely to aim: directly at the line. */
+.lineMark > :not(.lineHit) { pointer-events: none; }
 
 .foot {
   display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 16px;
@@ -193,6 +200,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .marquee { fill: rgba(47,128,237,.12); stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
 
+.sidedGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 8px; }
+.sidedGrid .kitBtn { font-size: 12px; font-weight: 600; padding: 7px 4px; }
+
+.sidedCustom {
+  display: flex; align-items: flex-end; gap: 6px; flex-wrap: wrap;
+  padding: 8px; margin-bottom: 10px;
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
+}
+.sidedCustom label { font-size: 10.5px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.sidedCustom input {
+  font: inherit; font-size: 12.5px; width: 52px; padding: 4px 6px;
+  border: 1px solid var(--line); border-radius: 5px; background: #fff;
+}
+.sidedCustom > span { font-size: 12px; color: var(--faint); padding-bottom: 6px; }
+.sidedCustom .tmplBtn { width: auto; flex: 1; margin: 0; text-align: center; }
+
+.sectionSplit { margin-top: 14px !important; padding-top: 12px; border-top: 1px solid var(--line); }
+
+.shirtRow { margin-bottom: 10px; }
+.shirtBtn {
+  min-width: 26px; padding: 3px 5px; font-size: 12px;
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 5px;
+}
+.shirtBtn.on { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 650; }
+
 .tmplBtn {
   display: block; width: 100%; text-align: left;
   background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
@@ -202,6 +234,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* Selection chrome for tokens. */
 .chromeBox { fill: none; stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
+/* Members of a group: outlined so it stays clear what is selected, but plain,
+   because the handles belong to the frame around them and not to each one. */
+.chromeMember { fill: none; stroke: #2f80ed; stroke-width: 1.4; stroke-opacity: .55; pointer-events: none; }
 .chromeCorner { fill: #2f80ed; stroke: #fff; stroke-width: 1.5; cursor: nwse-resize; }
 .chromeArm { stroke: #2f80ed; stroke-width: 2; }
 .chromeKnob { fill: #fff; stroke: #2f80ed; stroke-width: 2.2; cursor: grab; }

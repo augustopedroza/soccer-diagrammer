@@ -102,8 +102,13 @@ export function parse(text: string): ParseResult {
     const y = num(sh.y, 0, MAX_COORD);
 
     if (sh.k === 'player' && x !== null && y !== null) {
-      const n = num(sh.number, 1, 99);
-      if (n === null || !ALL_NUMBERS.includes(n) || (sh.team !== 'own' && sh.team !== 'opp')) {
+      // null or absent means a blank token, which is a real player in a
+      // small-sided practice. A number that is present but is not a shirt number
+      // is still a bad record, and still drops the shape.
+      const blank = sh.number === null || sh.number === undefined;
+      const n = blank ? null : num(sh.number, 1, 99);
+      const badNumber = !blank && (n === null || !ALL_NUMBERS.includes(n));
+      if (badNumber || (sh.team !== 'own' && sh.team !== 'opp')) {
         dropped++;
         continue;
       }

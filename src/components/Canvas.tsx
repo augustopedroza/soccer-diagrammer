@@ -12,12 +12,14 @@ import {
   lineEnds,
   playerAt,
   pointOnCurve,
+  rotatePt,
   textBox,
+  transformed,
   trimToTokens,
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { MAX_SCALE, MIN_SCALE, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
+import { ROTATE_STEP, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
 import { SurfaceSvg } from './Surface';
 import { KitMark, LineMark, PlayerMark, TextMark } from './Tokens';
 
@@ -38,12 +40,19 @@ interface Drag {
   /** For endpoint and bend drags: which line, and which end of it. */
   lineId?: string;
   end?: 'from' | 'to';
-  /** For a rotate drag: the pointer angle it started at, and the angles then. */
+  /**
+   * Rotate and scale work from the shapes as they were when the drag started,
+   * not from the last frame. Applying each move to the previous result compounds
+   * rounding — and with a group, drags every clamped shape a little further
+   * every frame.
+   */
+  snapshot?: Shape[];
+  /** The point a rotate or scale drag turns and grows about. */
+  pivot?: Point;
   fromAngle?: number;
-  rotWas?: Record<string, number>;
-  /** For a scale drag: the distance and scale it started at. */
   fromDist?: number;
-  scaleWas?: number;
+  /** The group frame's angle when the rotate drag started. */
+  baseRot?: number;
 }
 
 /** Half-size of the selection box around a shape, in surface units. */
@@ -106,6 +115,97 @@ function chromeBox(sh: Shape, kitSize: (id: string) => Point): { w: number; h: n
   return { w: (60 + CHROME_PAD) * scale, h: (64 + CHROME_PAD) * scale };
 }
 
+/** A box with corner grips and a rotate knob: what the handles act on. */
+interface Frame {
+  pivot: Point;
+  w: number;
+  h: number;
+  rot: number;
+  group: boolean;
+}
+
+/**
+ * The frame the handles act on.
+ *
+ * One selected token gets its own box, turned with it. Several get a single box
+ * around the lot. That box carries `groupRot` — the angle the group has been
+ * turned through since it was selected — and is measured in that turned basis,
+ * so it stays wrapped around the group instead of springing back to upright the
+ * moment the contents lean. Lines count towards the extent but never define a
+ * frame alone, since a line is edited by its ends.
+ */
+function selectionFrame(
+  diagram: Diagram,
+  selected: ReadonlySet<string>,
+  kitSize: (id: string) => Point,
+  groupRot: number,
+): Frame | null {
+  const picked = diagram.shapes.filter((s) => selected.has(s.id));
+  const tokens = picked.filter((s) => s.k !== 'line');
+  if (tokens.length === 0) return null;
+  if (picked.length === 1 && tokens.length === 1) {
+    const sh = tokens[0];
+    const b = chromeBox(sh, kitSize);
+    return { pivot: { x: sh.x, y: sh.y }, w: b.w, h: b.h, rot: sh.rot, group: false };
+  }
+
+  const pts: Point[] = [];
+  for (const sh of picked) {
+    if (sh.k === 'line') {
+      const { a, b } = lineEnds(diagram, sh);
+      pts.push(a, b);
+      continue;
+    }
+    const b = chromeBox(sh, kitSize);
+    // Corners of the token's own turned box, so a rotated item is fully inside.
+    const theta = rad(sh.rot);
+    for (const [sx, sy] of [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ]) {
+      pts.push({
+        x: sh.x + ((sx * b.w) / 2) * Math.cos(theta) - ((sy * b.h) / 2) * Math.sin(theta),
+        y: sh.y + ((sx * b.w) / 2) * Math.sin(theta) + ((sy * b.h) / 2) * Math.cos(theta),
+      });
+    }
+  }
+
+  // Measure in the group's own basis: unturn the points, take the bounds there,
+  // then turn the resulting box back.
+  const seed = {
+    x: pts.reduce((t, p) => t + p.x, 0) / pts.length,
+    y: pts.reduce((t, p) => t + p.y, 0) / pts.length,
+  };
+  const local = pts.map((p) => rotatePt(p, seed, -groupRot));
+  const x1 = Math.min(...local.map((p) => p.x));
+  const x2 = Math.max(...local.map((p) => p.x));
+  const y1 = Math.min(...local.map((p) => p.y));
+  const y2 = Math.max(...local.map((p) => p.y));
+  return {
+    pivot: rotatePt({ x: (x1 + x2) / 2, y: (y1 + y2) / 2 }, seed, groupRot),
+    w: Math.max(24, x2 - x1 + CHROME_PAD * 2),
+    h: Math.max(24, y2 - y1 + CHROME_PAD * 2),
+    rot: groupRot,
+    group: true,
+  };
+}
+
+/** The four corner points of a frame, in surface coordinates. */
+function frameCorners(f: Frame): Point[] {
+  const theta = rad(f.rot);
+  return [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ].map(([sx, sy]) => ({
+    x: f.pivot.x + ((sx * f.w) / 2) * Math.cos(theta) - ((sy * f.h) / 2) * Math.sin(theta),
+    y: f.pivot.y + ((sx * f.w) / 2) * Math.sin(theta) + ((sy * f.h) / 2) * Math.cos(theta),
+  }));
+}
+
 export function Canvas({
   diagram,
   tool,
@@ -123,6 +223,7 @@ export function Canvas({
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [groupRot, setGroupRot] = useState(0);
   const box = surfaceBox(diagram.surface);
 
   /**
@@ -149,6 +250,22 @@ export function Canvas({
     return { x: s?.w ?? 24, y: s?.h ?? 24 };
   };
 
+  /**
+   * How far the group has been turned since it was selected.
+   *
+   * Kept here rather than on the shapes because it belongs to the selection,
+   * not to the drawing: it exists only while these particular things are picked
+   * out together, and a new selection starts square again.
+   */
+  const selKey = [...selected].sort().join(',');
+  const lastSel = useRef(selKey);
+  if (lastSel.current !== selKey) {
+    lastSel.current = selKey;
+    if (groupRot !== 0) setGroupRot(0);
+  }
+
+  const frame = selectionFrame(diagram, selected, kitSize, groupRot);
+
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     const p = toSurface(e);
@@ -172,57 +289,35 @@ export function Canvas({
       return;
     }
 
-    // The rotate handle floats above a selected token and sits on top of
-    // everything, so it is tested first.
-    for (const sh of diagram.shapes) {
-      if (!selected.has(sh.id) || sh.k === 'line') continue;
-      const b = chromeBox(sh, kitSize);
-      if (dist(p, knobAt(sh.x, sh.y, b.h, sh.rot)) <= HANDLE_GRAB) {
-        const rotWas: Record<string, number> = {};
-        for (const t of diagram.shapes) {
-          if (selected.has(t.id) && t.k !== 'line') rotWas[t.id] = t.rot;
-        }
+    // The frame's handles sit on top of everything, so they are tested first.
+    // With several things selected there is one frame around the lot, and both
+    // handles act on all of them.
+    if (frame) {
+      const knob = knobAt(frame.pivot.x, frame.pivot.y, frame.h, frame.rot);
+      if (dist(p, knob) <= HANDLE_GRAB) {
         setDrag({
           mode: 'rotate',
           start: p,
           now: p,
           shift: e.shiftKey,
           path: [p],
-          lineId: sh.id,
-          fromAngle: angleAt(sh.x, sh.y, p),
-          rotWas,
+          snapshot: diagram.shapes,
+          pivot: frame.pivot,
+          fromAngle: angleAt(frame.pivot.x, frame.pivot.y, p),
+          baseRot: frame.group ? groupRot : undefined,
         });
         return;
       }
-    }
-
-    // Corners resize, but only equipment and labels. A player token is a fixed
-    // notational mark — one drawn larger than another would imply something the
-    // notation does not define — so players get a box with no corner grips.
-    for (const sh of diagram.shapes) {
-      if (!selected.has(sh.id) || sh.k === 'line') continue;
-      const b = chromeBox(sh, kitSize);
-      const half = { x: b.w / 2, y: b.h / 2 };
-      const theta = rad(sh.rot);
-      const corners = [
-        [-1, -1],
-        [1, -1],
-        [-1, 1],
-        [1, 1],
-      ].map(([sx, sy]) => ({
-        x: sh.x + (sx * half.x * Math.cos(theta) - sy * half.y * Math.sin(theta)),
-        y: sh.y + (sx * half.x * Math.sin(theta) + sy * half.y * Math.cos(theta)),
-      }));
-      if (corners.some((c) => dist(p, c) <= HANDLE_GRAB)) {
+      if (frameCorners(frame).some((c) => dist(p, c) <= HANDLE_GRAB)) {
         setDrag({
           mode: 'scale',
           start: p,
           now: p,
           shift: false,
           path: [p],
-          lineId: sh.id,
-          fromDist: Math.max(6, dist(p, { x: sh.x, y: sh.y })),
-          scaleWas: sh.k === 'text' ? sh.size : sh.scale,
+          snapshot: diagram.shapes,
+          pivot: frame.pivot,
+          fromDist: Math.max(6, dist(p, frame.pivot)),
         });
         return;
       }
@@ -280,47 +375,25 @@ export function Canvas({
     if (!drag) return;
     const p = toSurface(e);
 
-    if (drag.mode === 'rotate' && drag.lineId && drag.rotWas && drag.fromAngle !== undefined) {
-      const pivot = diagram.shapes.find((sh) => sh.id === drag.lineId);
-      if (pivot && pivot.k !== 'line') {
-        const delta = angleAt(pivot.x, pivot.y, p) - drag.fromAngle;
-        onChange(
-          {
-            ...diagram,
-            shapes: diagram.shapes.map((sh) => {
-              if (sh.k === 'line') return sh;
-              const was = drag.rotWas?.[sh.id];
-              if (was === undefined) return sh;
-              // Shift snaps to 15 degrees, the way most editors do.
-              const raw = was + delta;
-              const snapped = e.shiftKey ? Math.round(raw / 15) * 15 : raw;
-              return { ...sh, rot: ((snapped % 360) + 360) % 360 };
-            }),
-          },
-          false,
-        );
-      }
+    if (drag.mode === 'rotate' && drag.snapshot && drag.pivot && drag.fromAngle !== undefined) {
+      const raw = angleAt(drag.pivot.x, drag.pivot.y, p) - drag.fromAngle;
+      // Shift snaps to 15 degrees, the way most editors do.
+      const delta = e.shiftKey ? Math.round(raw / ROTATE_STEP) * ROTATE_STEP : raw;
+      onChange(
+        { ...diagram, shapes: transformed(drag.snapshot, selected, drag.pivot, delta, 1, box) },
+        false,
+      );
+      // The frame turns with its contents. Measured from the angle the drag
+      // started at, so it tracks the shapes exactly rather than accumulating.
+      if (drag.baseRot !== undefined) setGroupRot(drag.baseRot + delta);
     }
 
-    if (drag.mode === 'scale' && drag.lineId && drag.fromDist && drag.scaleWas !== undefined) {
-      const target = diagram.shapes.find((sh) => sh.id === drag.lineId);
-      if (target && target.k !== 'line') {
-        const ratio = dist(p, { x: target.x, y: target.y }) / drag.fromDist;
-        onChange(
-          {
-            ...diagram,
-            shapes: diagram.shapes.map((sh) => {
-              if (sh.id !== drag.lineId) return sh;
-              if (sh.k === 'text') return { ...sh, size: clamp(drag.scaleWas! * ratio, 14, 90) };
-              if (sh.k === 'player' || sh.k === 'kit') {
-                return { ...sh, scale: clamp(drag.scaleWas! * ratio, MIN_SCALE, MAX_SCALE) };
-              }
-              return sh;
-            }),
-          },
-          false,
-        );
-      }
+    if (drag.mode === 'scale' && drag.snapshot && drag.pivot && drag.fromDist) {
+      const ratio = clamp(dist(p, drag.pivot) / drag.fromDist, 0.05, 20);
+      onChange(
+        { ...diagram, shapes: transformed(drag.snapshot, selected, drag.pivot, 0, ratio, box) },
+        false,
+      );
     }
 
     if (drag.mode === 'endpoint' && drag.lineId) {
@@ -397,9 +470,11 @@ export function Canvas({
           lastTo: { ...p },
         };
         onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
-        // Deliberately NOT selected: the tool stays armed for the next line, and
-        // leaving it selected would make the next keystroke retype it instead of
-        // starting a new one.
+        // Deliberately NOT selected. The tool drops back to Select, so the new
+        // arrow can be hovered and clicked straight away; auto-selecting it
+        // instead would drop three handles on top of the players it was just
+        // joined to, and make the next line-type keystroke retype it rather than
+        // arm the tool.
         onSelect(new Set());
         onToolUsed();
       }
@@ -563,57 +638,74 @@ export function Canvas({
         />
       )}
       {preview}
-      {/* Selection chrome for tokens: a box, corner marks and the rotate knob
-          above it. Rotating from the drawing itself keeps the gesture where the
-          object is rather than in a panel across the screen. */}
-      {diagram.shapes.map((sh) => {
-        const chromed = sh.k === 'player' || sh.k === 'kit' || sh.k === 'text';
-        if (!selected.has(sh.id) || !chromed) return null;
-        const b = chromeBox(sh, kitSize);
-        const rot = sh.rot;
-        const canResize = true;
-        const canRotate = true;
-        const knobY = -b.h / 2 - ROTATE_ARM;
-        return (
-          <g
-            key={`c${sh.id}`}
-            className="chrome"
-            transform={`translate(${sh.x} ${sh.y}) rotate(${rot})`}
-          >
-            <rect x={-b.w / 2} y={-b.h / 2} width={b.w} height={b.h} className="chromeBox" />
-            {canResize &&
-              [
-                [-1, -1],
-                [1, -1],
-                [-1, 1],
-                [1, 1],
-              ].map(([sx, sy], i) => (
-                <rect
-                  key={i}
-                  x={(sx * b.w) / 2 - 4}
-                  y={(sy * b.h) / 2 - 4}
-                  width={8}
-                  height={8}
-                  className="chromeCorner"
-                />
-              ))}
-            {canRotate && (
-              <>
-                <line x1={0} y1={-b.h / 2} x2={0} y2={knobY + 8} className="chromeArm" />
-                <circle cx={0} cy={knobY} r={9} className="chromeKnob" />
-                <path
-                  d={`M -4.6 ${knobY - 1.4} A 4.6 4.6 0 1 1 -2.4 ${knobY + 3.6}`}
-                  className="chromeKnobIcon"
-                />
-                <path
-                  d={`M -7 ${knobY - 3.4} L -2.4 ${knobY - 2.2} L -4.2 ${knobY + 1.6} Z`}
-                  className="chromeKnobArrow"
-                />
-              </>
-            )}
-          </g>
-        );
-      })}
+      {/* When several things are selected each one still gets a thin outline, so
+          it stays obvious what is in the group; the handles belong to the frame
+          around the lot rather than to any one member. */}
+      {frame?.group &&
+        diagram.shapes.map((sh) => {
+          if (!selected.has(sh.id) || sh.k === 'line') return null;
+          const b = chromeBox(sh, kitSize);
+          return (
+            <rect
+              key={`m${sh.id}`}
+              x={-b.w / 2}
+              y={-b.h / 2}
+              width={b.w}
+              height={b.h}
+              className="chromeMember"
+              transform={`translate(${sh.x} ${sh.y}) rotate(${sh.rot})`}
+            />
+          );
+        })}
+
+      {/* The frame: a box, corner grips and the rotate knob above it. Rotating
+          from the drawing itself keeps the gesture where the objects are rather
+          than in a panel across the screen. */}
+      {frame && (
+        <g
+          className="chrome"
+          transform={`translate(${frame.pivot.x} ${frame.pivot.y}) rotate(${frame.rot})`}
+        >
+          <rect
+            x={-frame.w / 2}
+            y={-frame.h / 2}
+            width={frame.w}
+            height={frame.h}
+            className="chromeBox"
+          />
+          {[
+            [-1, -1],
+            [1, -1],
+            [-1, 1],
+            [1, 1],
+          ].map(([sx, sy], i) => (
+            <rect
+              key={i}
+              x={(sx * frame.w) / 2 - 4}
+              y={(sy * frame.h) / 2 - 4}
+              width={8}
+              height={8}
+              className="chromeCorner"
+            />
+          ))}
+          <line
+            x1={0}
+            y1={-frame.h / 2}
+            x2={0}
+            y2={-frame.h / 2 - ROTATE_ARM + 8}
+            className="chromeArm"
+          />
+          <circle cx={0} cy={-frame.h / 2 - ROTATE_ARM} r={9} className="chromeKnob" />
+          <path
+            d={`M -4.6 ${-frame.h / 2 - ROTATE_ARM - 1.4} A 4.6 4.6 0 1 1 -2.4 ${-frame.h / 2 - ROTATE_ARM + 3.6}`}
+            className="chromeKnobIcon"
+          />
+          <path
+            d={`M -7 ${-frame.h / 2 - ROTATE_ARM - 3.4} L -2.4 ${-frame.h / 2 - ROTATE_ARM - 2.2} L -4.2 ${-frame.h / 2 - ROTATE_ARM + 1.6} Z`}
+            className="chromeKnobArrow"
+          />
+        </g>
+      )}
 
       {/* Line handles last, so they sit above every stroke and token. */}
       {diagram.shapes.map((l) => {
