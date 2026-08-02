@@ -1,6 +1,7 @@
 import { equipmentSpec } from '../data/equipment';
 import { DEFAULT_COLORS, inkOn, lineSpec } from '../data/notation';
 import {
+  LINE_GRAB,
   angleOnCurve,
   textBox,
   controlPoint,
@@ -121,6 +122,18 @@ export function LineMark({
 
   return (
     <g className="lineMark">
+      {/* An invisible stroke as wide as the click tolerance, so the cursor
+          changes exactly where a click would actually land. Matching it to
+          LINE_GRAB is the point: a hover target narrower than the hit test
+          leaves arrows feeling dead, and a wider one promises a hit that misses. */}
+      <path
+        className="lineHit"
+        d={d}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={LINE_GRAB * 2}
+        strokeLinecap="round"
+      />
       {selected && (
         <path d={d} fill="none" stroke="#2f80ed" strokeWidth={11} strokeOpacity={0.28} />
       )}
@@ -497,12 +510,12 @@ export function TextMark({
   shape,
   selected,
 }: {
-  shape: { x: number; y: number; text: string; size: number };
+  shape: { x: number; y: number; text: string; size: number; rot: number };
   selected?: boolean;
 }) {
   const { w, h } = textBox(shape);
   return (
-    <g className="token">
+    <g className="token" transform={`rotate(${shape.rot} ${shape.x} ${shape.y})`}>
       {selected && (
         <rect
           x={shape.x - w / 2 - 6}

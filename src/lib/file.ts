@@ -136,7 +136,8 @@ export function parse(text: string): ParseResult {
         x,
         y,
         text: sh.text.slice(0, MAX_LABEL),
-        size: size ?? TEXT_SIZES[1],
+        size: size ?? TEXT_SIZES[0],
+        rot: rot(sh.rot),
       });
       seen.add(id);
     } else if (sh.k === 'line') {

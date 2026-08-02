@@ -160,7 +160,7 @@ export function Canvas({
           ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: 1, ...p }
           : tool.kind === 'kit'
             ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: 1, ...p }
-            : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[1], ...p };
+            : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[0], rot: 0, ...p };
       onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
       onSelect(new Set([shape.id]));
       onToolUsed();
@@ -175,12 +175,12 @@ export function Canvas({
     // The rotate handle floats above a selected token and sits on top of
     // everything, so it is tested first.
     for (const sh of diagram.shapes) {
-      if (!selected.has(sh.id) || (sh.k !== 'player' && sh.k !== 'kit')) continue;
+      if (!selected.has(sh.id) || sh.k === 'line') continue;
       const b = chromeBox(sh, kitSize);
       if (dist(p, knobAt(sh.x, sh.y, b.h, sh.rot)) <= HANDLE_GRAB) {
         const rotWas: Record<string, number> = {};
         for (const t of diagram.shapes) {
-          if (selected.has(t.id) && (t.k === 'player' || t.k === 'kit')) rotWas[t.id] = t.rot;
+          if (selected.has(t.id) && t.k !== 'line') rotWas[t.id] = t.rot;
         }
         setDrag({
           mode: 'rotate',
@@ -203,7 +203,7 @@ export function Canvas({
       if (!selected.has(sh.id) || sh.k === 'line') continue;
       const b = chromeBox(sh, kitSize);
       const half = { x: b.w / 2, y: b.h / 2 };
-      const theta = rad(sh.k === 'text' ? 0 : sh.rot);
+      const theta = rad(sh.rot);
       const corners = [
         [-1, -1],
         [1, -1],
@@ -282,13 +282,13 @@ export function Canvas({
 
     if (drag.mode === 'rotate' && drag.lineId && drag.rotWas && drag.fromAngle !== undefined) {
       const pivot = diagram.shapes.find((sh) => sh.id === drag.lineId);
-      if (pivot && (pivot.k === 'player' || pivot.k === 'kit')) {
+      if (pivot && pivot.k !== 'line') {
         const delta = angleAt(pivot.x, pivot.y, p) - drag.fromAngle;
         onChange(
           {
             ...diagram,
             shapes: diagram.shapes.map((sh) => {
-              if (!(sh.k === 'player' || sh.k === 'kit')) return sh;
+              if (sh.k === 'line') return sh;
               const was = drag.rotWas?.[sh.id];
               if (was === undefined) return sh;
               // Shift snaps to 15 degrees, the way most editors do.
@@ -570,9 +570,9 @@ export function Canvas({
         const chromed = sh.k === 'player' || sh.k === 'kit' || sh.k === 'text';
         if (!selected.has(sh.id) || !chromed) return null;
         const b = chromeBox(sh, kitSize);
-        const rot = sh.k === 'text' ? 0 : sh.rot;
+        const rot = sh.rot;
         const canResize = true;
-        const canRotate = sh.k === 'player' || sh.k === 'kit';
+        const canRotate = true;
         const knobY = -b.h / 2 - ROTATE_ARM;
         return (
           <g

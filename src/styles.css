@@ -125,6 +125,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .canvas.tool-line { cursor: crosshair; }
 .selRing { fill: none; stroke: #2f80ed; stroke-width: 3; stroke-dasharray: 5 4; }
 .token { cursor: grab; }
+/* A line is selected by clicking but is not dragged as a whole — its ends and
+   its midpoint are — so it gets the pointer rather than the token's grab. */
+.canvas.tool-select .lineHit { cursor: pointer; }
 
 .foot {
   display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 16px;

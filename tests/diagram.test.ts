@@ -211,7 +211,7 @@ describe('save and open', () => {
 describe('labels', () => {
   it('round-trips a label with its size', () => {
     const d = emptyDiagram();
-    d.shapes = [{ k: 'text', id: 't1', x: 100, y: 200, text: 'Overload here', size: 32 }];
+    d.shapes = [{ k: 'text', id: 't1', x: 100, y: 200, text: 'Overload here', size: 32, rot: 30 }];
     const r = parse(serialize(d));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -248,7 +248,7 @@ describe('labels', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.diagram.shapes).toHaveLength(1);
-    expect(r.diagram.shapes[0]).toMatchObject({ id: 'ok', size: 32 });
+    expect(r.diagram.shapes[0]).toMatchObject({ id: 'ok', size: 22 });
     expect(r.dropped).toBe(1);
   });
 

@@ -63,6 +63,8 @@ export interface TextShape {
   text: string;
   /** Cap height in surface units. */
   size: number;
+  /** Degrees clockwise, so a label can run along a touchline or a channel. */
+  rot: number;
 }
 
 export interface KitShape {

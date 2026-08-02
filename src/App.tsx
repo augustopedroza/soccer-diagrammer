@@ -138,7 +138,7 @@ export default function App() {
         const next = {
           ...prev,
           shapes: prev.shapes.map((sh) =>
-            selected.has(sh.id) && (sh.k === 'player' || sh.k === 'kit')
+            selected.has(sh.id) && sh.k !== 'line'
               ? {
                   ...sh,
                   rot: absolute
