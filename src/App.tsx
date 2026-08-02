@@ -14,7 +14,7 @@ import {
 } from './data/formations';
 import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
-import { wavyPath } from './lib/geometry';
+import { confineToBox, wavyPath } from './lib/geometry';
 import { surfaceBox } from './lib/surfaceBox';
 import { ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
@@ -27,6 +27,40 @@ const HISTORY_LIMIT = 60;
  * suit a 16-unit tall button; at full size it would fill the row edge to edge.
  */
 const WAVY_ICON = wavyPath({ x: 2, y: 8 }, { x: 25, y: 8 }, { x: 48, y: 8 }, 4);
+
+/**
+ * A palette section that folds away.
+ *
+ * The rails are taller than a laptop screen once every section is open, and the
+ * ones a coach sets once — the surface, the kit, the equipment — are exactly the
+ * ones worth folding. Open by default: a panel that hides its own contents on
+ * first load reads as an empty app.
+ */
+function Panel({
+  title,
+  children,
+  defaultOpen = true,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={`panel${open ? '' : ' shut'}`}>
+      <h2>
+        <button className="panelToggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          <span>{title}</span>
+          <span className="chev" aria-hidden="true" />
+        </button>
+      </h2>
+      {open && children}
+    </section>
+  );
+}
+
+/** How long a typed 1 waits to see whether it is really a 10 or an 11. */
+const NUMBER_CHASE_MS = 900;
 
 /** A side is 1..11 players; anything else keeps the previous count. */
 const sideCount = (raw: string, was: number): number => {
@@ -228,6 +262,30 @@ export default function App() {
         setTool({ kind: 'select' });
         setSelected(new Set());
       }
+      // Typing a number renumbers the selected players.
+      //
+      // 10 and 11 need two keystrokes, so a 1 is held briefly: press 1 and the
+      // player becomes the 1; press 0 or 1 straight after and it becomes the 10
+      // or the 11. Either way the shirt is right after the first press, so a
+      // slow second press is a correction rather than a failure. 0 on its own is
+      // no shirt number, so it clears.
+      if (/^[0-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && selectedPlayers.length > 0) {
+        e.preventDefault();
+        const now = Date.now();
+        const pending = numberBuffer.current;
+        const chasing = pending !== null && now - pending.at < NUMBER_CHASE_MS && pending.first === 1;
+        if (chasing && (e.key === '0' || e.key === '1')) {
+          numberSelected(e.key === '0' ? 10 : 11);
+          numberBuffer.current = null;
+        } else if (e.key === '0') {
+          numberSelected(null);
+          numberBuffer.current = null;
+        } else {
+          const n = Number(e.key);
+          numberSelected(ALL_NUMBERS.includes(n) ? n : null);
+          numberBuffer.current = n === 1 ? { first: 1, at: now } : null;
+        }
+      }
       if (e.key.toLowerCase() === 's') setTool({ kind: 'select' });
       if (e.key.toLowerCase() === 'l') setTool({ kind: 'text' });
       // Square brackets turn the selection, the way most editors do.
@@ -245,8 +303,23 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, selected, diagram, commitNow, applyLine, rotateSelected, pasteShapes]);
 
-  const setSurface = (patch: Partial<Diagram['surface']>) =>
-    commitNow({ ...diagram, surface: { ...diagram.surface, ...patch } });
+  /**
+   * Changes the surface, keeping everything on it reachable.
+   *
+   * A smaller crop, or turning the pitch on its side, makes the drawing box a
+   * different shape — and anything left outside it was unreachable: not
+   * visible, not clickable, not deletable, since the pointer is clamped to the
+   * box too. Whatever falls outside comes back to the edge, and the count is
+   * reported rather than done quietly.
+   */
+  const setSurface = (patch: Partial<Diagram['surface']>) => {
+    const surface = { ...diagram.surface, ...patch };
+    const { shapes, moved } = confineToBox(diagram.shapes, surfaceBox(surface));
+    commitNow({ ...diagram, surface, shapes });
+    if (moved > 0) {
+      setNotice(`${moved} ${moved === 1 ? 'item was' : 'items were'} off the new field, and moved to its edge.`);
+    }
+  };
 
   function exportSvg() {
     const svg = document.querySelector('.canvas');
@@ -277,6 +350,12 @@ export default function App() {
 
   const [templateTeam, setTemplateTeam] = useState<Team>('own');
   const [customSided, setCustomSided] = useState<SmallSided>({ own: 4, opp: 3 });
+  /** A just-typed 1, waiting to see whether a 0 or a 1 follows it. */
+  const numberBuffer = useRef<{ first: number; at: number } | null>(null);
+  /** The open shirt-number box: which player, where on screen, what is typed. */
+  const [numberEdit, setNumberEdit] = useState<
+    { id: string; x: number; y: number; value: string } | null
+  >(null);
   const labelInput = useRef<HTMLInputElement>(null);
   /** Kept in the app, not the system clipboard — nothing leaves the page. */
   const clipboard = useRef<Shape[]>([]);
@@ -371,6 +450,36 @@ export default function App() {
     setSelected(new Set());
   }
 
+  /**
+   * Closes the shirt-number box, applying what was typed.
+   *
+   * An empty box clears the number rather than cancelling, because blank is a
+   * legitimate shirt here. Anything that is not a real shirt number is refused
+   * outright — silently rounding 47 to 4 would be a worse answer than none.
+   */
+  function commitNumberEdit() {
+    setNumberEdit((edit) => {
+      if (!edit) return null;
+      const raw = edit.value.trim();
+      const n = raw === '' ? null : Number(raw);
+      if (n === null || ALL_NUMBERS.includes(n)) {
+        setDiagram((prev) => {
+          past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+          future.current = [];
+          return {
+            ...prev,
+            shapes: prev.shapes.map((sh) =>
+              sh.k === 'player' && sh.id === edit.id ? { ...sh, number: n } : sh,
+            ),
+          };
+        });
+      } else {
+        setNotice(`${raw} is not a shirt number — 1 to 11, or empty for none.`);
+      }
+      return null;
+    });
+  }
+
   /** Numbers, or clears, every player in the selection. */
   function numberSelected(value: number | null) {
     commitNow({
@@ -425,8 +534,7 @@ export default function App() {
 
       <div className="work">
         <aside className="palette">
-          <section>
-            <h2>Surface</h2>
+          <Panel title="Surface">
             <div className="segmented">
               {(['soccer', 'futsal'] as Sport[]).map((s) => (
                 <button key={s} aria-pressed={diagram.surface.sport === s} onClick={() => setSurface({ sport: s })}>
@@ -455,7 +563,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-          </section>
+          </Panel>
 
           {selectedLabels.length > 0 && (
             <section>
@@ -524,8 +632,7 @@ export default function App() {
             ))}
           </section>
 
-          <section>
-            <h2>Kit colours</h2>
+          <Panel title="Kit colours">
             {TEAM_SPECS.map((t) => (
               <div className="colorRow" key={t.team}>
                 <span className="colorLabel">{t.label}</span>
@@ -554,7 +661,7 @@ export default function App() {
                 </div>
               </div>
             ))}
-          </section>
+          </Panel>
 
           <section>
             <h2>Players</h2>
@@ -616,6 +723,10 @@ export default function App() {
                     </button>
                   ))}
                 </div>
+                <p className="hint">
+                  Or double-click a player and press Enter. Typing a number works
+                  too — press 1 then 0 for the 10, 1 then 1 for the 11.
+                </p>
               </div>
             )}
             <button onClick={() => setTool({ kind: 'select' })} aria-pressed={tool.kind === 'select'}>
@@ -674,12 +785,46 @@ export default function App() {
             // could not be hovered or clicked without first going back to Select.
             // Its keyboard shortcut re-arms it in one keystroke.
             onToolUsed={() => setTool({ kind: 'select' })}
+            onEditNumber={(id, at) => {
+              const p = diagram.shapes.find((s) => s.id === id);
+              setNumberEdit({
+                id,
+                x: at.x,
+                y: at.y,
+                value: p?.k === 'player' && p.number !== null ? String(p.number) : '',
+              });
+              setSelected(new Set([id]));
+            }}
           />
+          {/* Renumbering happens on the player, not across the screen. Enter
+              finishes, Escape leaves the shirt as it was, and an empty box means
+              no number — which is a real answer here, not a cancelled edit. */}
+          {numberEdit && (
+            <div className="numberPop" style={{ left: numberEdit.x, top: numberEdit.y }}>
+              <input
+                autoFocus
+                inputMode="numeric"
+                maxLength={2}
+                aria-label="Shirt number"
+                placeholder="—"
+                value={numberEdit.value}
+                onChange={(e) =>
+                  setNumberEdit((s) =>
+                    s ? { ...s, value: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) } : s,
+                  )
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitNumberEdit();
+                  if (e.key === 'Escape') setNumberEdit(null);
+                }}
+                onBlur={commitNumberEdit}
+              />
+            </div>
+          )}
         </main>
 
         <aside className="palette kitRail">
-          <section>
-            <h2>Equipment</h2>
+          <Panel title="Equipment">
             <div className="kitGrid">
               {EQUIPMENT.map((e) => (
                 <button
@@ -692,11 +837,10 @@ export default function App() {
                 </button>
               ))}
             </div>
-          </section>
+          </Panel>
 
 
-          <section>
-            <h2>Templates</h2>
+          <Panel title="Templates">
             <p className="hint">
               Small-sided games: triangles against discs, both sides replaced.
               They go down blank — number them below once a number means
@@ -766,7 +910,7 @@ export default function App() {
                 {templateTeam === 'own' ? 'My team' : 'Opposition'} {f.label}
               </button>
             ))}
-          </section>
+          </Panel>
         </aside>
       </div>
 

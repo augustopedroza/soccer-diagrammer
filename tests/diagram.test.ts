@@ -11,7 +11,9 @@ import {
   HEAD_GRAB,
   LINE_GRAB,
   PLAYER_RADIUS,
+  TOKEN_GAP,
   bendFor,
+  confineToBox,
   controlPoint,
   hitTest,
   lineEnds,
@@ -122,6 +124,76 @@ describe('picking a line', () => {
   it('misses when the pointer is nowhere near the stroke', () => {
     const d = withPlayers();
     expect(hitTest(d, { x: 300, y: 400 }, kitSize)).toBeUndefined();
+  });
+});
+
+describe('a curved arrow into a player', () => {
+  const bowed = (bend: number): Diagram => {
+    const d = withPlayers();
+    return { ...d, shapes: d.shapes.map((s) => (s.k === 'line' ? { ...s, bend } : s)) };
+  };
+  const target = { x: 600, y: 400 };
+
+  for (const bend of [0, 40, -90, 160]) {
+    it(`points at the player it is joined to (bend ${bend})`, () => {
+      const d = bowed(bend);
+      const g = lineGeometry(d, d.shapes.find((s) => s.k === 'line') as never);
+
+      // The head sits clear of the token, on the stroke.
+      // The same gap however the line bows: a trim that stopped at the first
+      // coarse sample left a long curve visibly further off its token than a
+      // short one, which reads as two different rules.
+      const gap = Math.hypot(g.head.x - target.x, g.head.y - target.y);
+      expect(gap).toBeCloseTo(PLAYER_RADIUS + TOKEN_GAP, 1);
+
+      // And it aims at the player: the angle it is drawn at, followed from the
+      // head, lands on the token rather than sailing past it.
+      const rad = (g.angle * Math.PI) / 180;
+      const ahead = { x: g.head.x + Math.cos(rad) * gap, y: g.head.y + Math.sin(rad) * gap };
+      expect(Math.hypot(ahead.x - target.x, ahead.y - target.y)).toBeLessThan(PLAYER_RADIUS * 0.6);
+    });
+  }
+
+  it('leaves a line alone when it is too short to trim', () => {
+    const d = withPlayers();
+    const short: Diagram = {
+      ...d,
+      shapes: d.shapes.map((s) => (s.id === 'p2' ? { ...s, x: 310, y: 690 } : s)),
+    };
+    const g = lineGeometry(short, short.shapes.find((s) => s.k === 'line') as never);
+    // Untrimmed rather than inverted: a line that runs under a token beats one
+    // whose head has crossed over its own tail.
+    expect(g.a).toEqual({ x: 300, y: 700 });
+    expect(g.head).toEqual({ x: 310, y: 690 });
+  });
+});
+
+describe('changing the surface', () => {
+  it('brings stranded shapes back inside the new box', () => {
+    const d = withPlayers();
+    const { shapes, moved } = confineToBox(d.shapes, { w: 400, h: 400 });
+    // All three players fall outside a 400x400 box, and so do the line's ends.
+    expect(moved).toBe(4);
+    for (const s of shapes) {
+      if (s.k === 'line') continue;
+      expect(s.x).toBeLessThanOrEqual(400);
+      expect(s.y).toBeLessThanOrEqual(400);
+    }
+  });
+
+  it('leaves a diagram that already fits completely alone', () => {
+    const d = withPlayers();
+    const { shapes, moved } = confineToBox(d.shapes, { w: 1000, h: 1000 });
+    expect(moved).toBe(0);
+    expect(shapes).toEqual(d.shapes);
+  });
+
+  it('keeps anchored ends anchored while it does so', () => {
+    const d = withPlayers();
+    const { shapes } = confineToBox(d.shapes, { w: 200, h: 200 });
+    const l = shapes.find((s) => s.k === 'line') as { from: unknown; to: unknown };
+    expect(l.from).toEqual({ ref: 'p1' });
+    expect(l.to).toEqual({ ref: 'p2' });
   });
 });
 

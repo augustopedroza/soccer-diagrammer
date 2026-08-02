@@ -13,9 +13,9 @@ import {
   playerAt,
   pointOnCurve,
   rotatePt,
+  strokeGeometry,
   textBox,
   transformed,
-  trimToTokens,
   wavyPath,
   type Point,
 } from '../lib/geometry';
@@ -213,6 +213,7 @@ export function Canvas({
   onSelect,
   onChange,
   onToolUsed,
+  onEditNumber,
 }: {
   diagram: Diagram;
   tool: Tool;
@@ -220,6 +221,8 @@ export function Canvas({
   onSelect: (ids: ReadonlySet<string>) => void;
   onChange: (next: Diagram, commit: boolean) => void;
   onToolUsed: () => void;
+  /** Double-click on a player: edit its shirt number where the player is. */
+  onEditNumber?: (id: string, at: { x: number; y: number }) => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -547,12 +550,13 @@ export function Canvas({
     const a = drag.start;
     const b = drag.now;
     const bend = drag.shift ? bendFromPath(drag.path, a, b) : 0;
-    const t = trimToTokens(a, b, !!playerAt(diagram, a), !!playerAt(diagram, b));
-    const c = controlPoint(t.a, t.b, bend);
-    const head = pointOnCurve(t.a, c, t.b, 1);
+    // Same geometry the finished line will use, so the preview does not jump
+    // when the pointer comes up.
+    const g = strokeGeometry(a, b, bend, !!playerAt(diagram, a), !!playerAt(diagram, b));
+    const head = g.head;
     const d = spec.wavy
-      ? wavyPath(t.a, c, t.b)
-      : `M${t.a.x},${t.a.y} Q${c.x},${c.y} ${t.b.x},${t.b.y}`;
+      ? wavyPath(g.a, g.c, g.b)
+      : `M${g.a.x},${g.a.y} Q${g.c.x},${g.c.y} ${g.b.x},${g.b.y}`;
     return (
       <g opacity={0.75}>
         <path
@@ -599,6 +603,13 @@ export function Canvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={() => setDrag(null)}
+      onDoubleClick={(e) => {
+        // Renumbering where the player is, rather than across the screen in a
+        // panel. The first click of the pair has already selected it.
+        if (!onEditNumber || tool.kind !== 'select') return;
+        const hit = hitTest(diagram, toSurface(e), kitSize);
+        if (hit?.k === 'player') onEditNumber(hit.id, { x: e.clientX, y: e.clientY });
+      }}
       role="application"
       aria-label="Diagram canvas"
     >

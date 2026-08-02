@@ -111,29 +111,6 @@ export function angleOnCurve(a: Point, c: Point, b: Point, t: number): number {
  */
 export const TOKEN_GAP = 12;
 
-/**
- * Shortens a line so it starts and ends clear of an anchored token rather than
- * at its centre — otherwise the arrow head disappears under the player.
- */
-export function trimToTokens(
-  a: Point,
-  b: Point,
-  trimA: boolean,
-  trimB: boolean,
-  r = PLAYER_RADIUS + TOKEN_GAP,
-): { a: Point; b: Point } {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy);
-  if (len < r * 2.2) return { a, b };
-  const ux = dx / len;
-  const uy = dy / len;
-  return {
-    a: trimA ? { x: a.x + ux * r, y: a.y + uy * r } : a,
-    b: trimB ? { x: b.x - ux * r, y: b.y - uy * r } : b,
-  };
-}
-
 /** How far a dribble stroke swings off its centre line, in surface units. */
 export const WAVE_AMP = 7;
 
@@ -185,27 +162,108 @@ export function wavyPath(a: Point, c: Point, b: Point, amp = WAVE_AMP): string {
 }
 
 /**
+ * The part of a quadratic between two parameters, as a quadratic of its own.
+ *
+ * Exact, not sampled: a Bézier segment is the same kind of curve as the whole,
+ * so a trimmed line is still one `Q` command and still bows the way it was
+ * drawn.
+ */
+function subCurve(a: Point, c: Point, b: Point, t0: number, t1: number): { a: Point; c: Point; b: Point } {
+  const u0 = 1 - t0;
+  const u1 = 1 - t1;
+  return {
+    a: pointOnCurve(a, c, b, t0),
+    c: {
+      x: u0 * u1 * a.x + (u0 * t1 + u1 * t0) * c.x + t0 * t1 * b.x,
+      y: u0 * u1 * a.y + (u0 * t1 + u1 * t0) * c.y + t0 * t1 * b.y,
+    },
+    b: pointOnCurve(a, c, b, t1),
+  };
+}
+
+export interface StrokeGeometry {
+  a: Point;
+  b: Point;
+  c: Point;
+  head: Point;
+  angle: number;
+}
+
+/**
  * The stroke as it is actually drawn: ends pulled off any token they are
  * anchored to, the control point, and where the arrow head lands.
  *
- * Deliberately shared with the renderer. The arrow head is a target in its own
- * right, and a hit test measured against the untrimmed chord would put that
- * target up to a token's radius away from the head on screen.
+ * The trim walks ALONG THE CURVE rather than along the chord between the ends.
+ * Trimming the chord and then re-bowing it — which is what this did first —
+ * leaves a curved arrow's head sitting beside the player with its point aimed
+ * past them, because the chord and the curve arrive from different directions.
+ * Walking the curve keeps the head on the stroke and pointing where the stroke
+ * is going, which is at the player it is joined to.
+ *
+ * Deliberately shared with the renderer and the hit test, so what you can click
+ * is what you can see.
  */
-export function lineGeometry(
-  d: Diagram,
-  l: LineShape,
-): { a: Point; b: Point; c: Point; head: Point; angle: number } {
-  const { a, b } = lineEnds(d, l);
-  const t = trimToTokens(a, b, isRef(l.from), isRef(l.to));
-  const c = controlPoint(t.a, t.b, l.bend);
-  return {
-    a: t.a,
-    b: t.b,
-    c,
-    head: pointOnCurve(t.a, c, t.b, 1),
-    angle: angleOnCurve(t.a, c, t.b, 1),
+export function strokeGeometry(
+  a: Point,
+  b: Point,
+  bend: number,
+  trimA: boolean,
+  trimB: boolean,
+  r = PLAYER_RADIUS + TOKEN_GAP,
+): StrokeGeometry {
+  const c = controlPoint(a, b, bend);
+  const STEPS = 96;
+
+  /**
+   * The parameter at which the curve first gets `r` away from `anchor`,
+   * scanning from `end`.
+   *
+   * Coarse scan, then a few bisections. The scan alone leaves the gap as wide
+   * as one step — on a long curve that is a visibly bigger gap than on a short
+   * one, which makes the same rule look like two different rules.
+   */
+  const crossing = (anchor: Point, from: 0 | 1): number => {
+    const at = (t: number) => dist(pointOnCurve(a, c, b, t), anchor);
+    let prev: number = from;
+    for (let i = 1; i <= STEPS; i++) {
+      const t = from === 0 ? i / STEPS : 1 - i / STEPS;
+      if (at(t) >= r) {
+        let lo = prev;
+        let hi = t;
+        for (let k = 0; k < 12; k++) {
+          const mid = (lo + hi) / 2;
+          if (at(mid) >= r) hi = mid;
+          else lo = mid;
+        }
+        return hi;
+      }
+      prev = t;
+    }
+    return from;
   };
+
+  const t0 = trimA ? crossing(a, 0) : 0;
+  const t1 = trimB ? crossing(b, 1) : 1;
+  // Too short to trim: better a line that runs under a token than no line.
+  // Too short to trim: better a line that runs under a token than one whose
+  // head has crossed over its own tail.
+  const short = t1 - t0 < 0.08;
+  const from = short ? 0 : t0;
+  const to = short ? 1 : t1;
+
+  const sub = subCurve(a, c, b, from, to);
+  return {
+    ...sub,
+    head: sub.b,
+    // Tangent of the original curve at the trim point, which is the sub-curve's
+    // own end tangent — so the head points along the stroke, into the token.
+    angle: angleOnCurve(a, c, b, to),
+  };
+}
+
+export function lineGeometry(d: Diagram, l: LineShape): StrokeGeometry {
+  const { a, b } = lineEnds(d, l);
+  return strokeGeometry(a, b, l.bend, isRef(l.from), isRef(l.to));
 }
 
 /** Perpendicular distance from a point to a segment, clamped to its ends. */
@@ -284,6 +342,47 @@ export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): S
     if (dd <= LINE_GRAB && (!closest || dd < closest.d)) closest = { s, d: dd };
   }
   return closest?.s;
+}
+
+/**
+ * Brings everything back inside the drawing box.
+ *
+ * Cropping to a smaller field used to strand whatever fell outside it: the
+ * shapes were still in the diagram and still printed into an export, but they
+ * were off the viewBox, so they could not be seen, clicked, marquee'd or
+ * deleted — the pointer itself is clamped to the box. Work you cannot reach is
+ * worse than work that has moved, and this is undoable.
+ */
+export function confineToBox(
+  shapes: Shape[],
+  box: { w: number; h: number },
+): { shapes: Shape[]; moved: number } {
+  let moved = 0;
+  const outside = (p: Point) => p.x < 0 || p.y < 0 || p.x > box.w || p.y > box.h;
+  const next = shapes.map((s) => {
+    if (s.k === 'line') {
+      const from = isRef(s.from) ? s.from : s.from;
+      const to = isRef(s.to) ? s.to : s.to;
+      const wasOut =
+        (!isRef(from) && outside(from)) ||
+        (!isRef(to) && outside(to)) ||
+        outside(s.lastFrom) ||
+        outside(s.lastTo);
+      if (!wasOut) return s;
+      moved++;
+      return {
+        ...s,
+        from: isRef(from) ? from : clampToBox(from, box),
+        to: isRef(to) ? to : clampToBox(to, box),
+        lastFrom: clampToBox(s.lastFrom, box),
+        lastTo: clampToBox(s.lastTo, box),
+      };
+    }
+    if (!outside(s)) return s;
+    moved++;
+    return { ...s, ...clampToBox(s, box) };
+  });
+  return { shapes: next, moved };
 }
 
 /** The player a line end should attach to, if it was released over one. */

@@ -63,29 +63,29 @@ export function PlayerToken({
 
   return (
     <g transform={`translate(${x} ${y}) scale(${scale})`} className="token">
+      {/* The number turns with the token: it is printed on the shirt, and a
+          number that stayed upright while the triangle leaned looked like two
+          marks that had come apart. Blank tokens carry no text at all. */}
       <g transform={`rotate(${rot})`}>
         {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
+        {number !== null && (
+          <text
+            // A triangle is widest near its base, so the number sits below the
+            // centroid where there is room for two digits. Both teams use the
+            // same size: the two shapes are read side by side, and a smaller
+            // number on one of them looks like a different kind of token rather
+            // than the same one in a different shirt.
+            y={team === 'own' ? 6 : 1}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill={inkOn(fill)}
+            fontSize={22}
+            fontWeight={700}
+          >
+            {number}
+          </text>
+        )}
       </g>
-      {/* The number stays upright however the token is turned — a rotated
-          shirt number is unreadable, and it is the shape that carries facing.
-          Blank tokens carry no text at all. */}
-      {number !== null && (
-        <text
-          // A triangle is widest near its base, so the number sits below the
-          // centroid where there is room for two digits. Both teams use the same
-          // size: the two shapes are read side by side, and a smaller number on
-          // one of them looks like a different kind of token rather than the
-          // same one in a different shirt.
-          y={team === 'own' ? 6 : 1}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill={inkOn(fill)}
-          fontSize={22}
-          fontWeight={700}
-        >
-          {number}
-        </text>
-      )}
     </g>
   );
 }
