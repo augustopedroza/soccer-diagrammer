@@ -293,14 +293,46 @@ export function KitMark({
             <ellipse rx={w / 2 - 4} ry={h / 2 - 3} fill="#fff" fillOpacity={0.28} />
           </>
         );
-      case 'cone':
+      case 'cone': {
+        // A training cone in elevation: a narrow tapered body standing on a
+        // wider base plate, with the usual reflective band. The body used to be
+        // almost as wide as its base, which read as an orange blob rather than
+        // as a cone.
+        const baseY = h / 2 - 5;
+        const bodyHalf = w * 0.3;
+        const tipY = -h / 2 + 1;
+        const clipId = `cone-${Math.round(w * 10)}`;
+        const body = `M0,${tipY}
+          C ${bodyHalf * 0.42},${tipY + h * 0.34} ${bodyHalf * 0.7},${baseY - h * 0.28} ${bodyHalf},${baseY}
+          L ${-bodyHalf},${baseY}
+          C ${-bodyHalf * 0.7},${baseY - h * 0.28} ${-bodyHalf * 0.42},${tipY + h * 0.34} 0,${tipY} Z`;
         return (
           <>
-            <ellipse cy={h / 2 - 3} rx={w / 2} ry={4.5} fill="#c25c12" />
-            <path d={`M0,${-h / 2} Q${w * 0.16},${-h * 0.1} ${w / 2 - 1},${h / 2 - 4} Q0,${h / 2 + 2} ${-w / 2 + 1},${h / 2 - 4} Q${-w * 0.16},${-h * 0.1} 0,${-h / 2} Z`} fill={orange} stroke={stroke} strokeWidth={1.2} />
-            <path d={`M-2,${-h / 2 + 2} Q${-w * 0.12},${h * 0.1} ${-w * 0.22},${h / 2 - 5}`} stroke="#fff" strokeOpacity={0.45} strokeWidth={2.4} fill="none" strokeLinecap="round" />
+            <defs>
+              <clipPath id={clipId}>
+                <path d={body} />
+              </clipPath>
+            </defs>
+            {/* Base plate, drawn first so the body sits on it. */}
+            <rect
+              x={-w / 2}
+              y={baseY}
+              width={w}
+              height={5}
+              rx={2}
+              fill="#c25c12"
+              stroke={stroke}
+              strokeWidth={1}
+            />
+            <path d={body} fill={orange} stroke={stroke} strokeWidth={1.1} strokeLinejoin="round" />
+            <g clipPath={`url(#${clipId})`}>
+              <rect x={-w} y={-h * 0.06} width={w * 2} height={h * 0.2} fill="#fff" fillOpacity={0.82} />
+              {/* A soft highlight down the lit side. */}
+              <rect x={-bodyHalf} y={tipY} width={bodyHalf * 0.5} height={h} fill="#fff" fillOpacity={0.16} />
+            </g>
           </>
         );
+      }
       case 'dummy':
         return (
           <>
