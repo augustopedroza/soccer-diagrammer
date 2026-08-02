@@ -137,3 +137,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .swatchCustom { background: linear-gradient(135deg,#f66,#6cf,#6f9); cursor: pointer; }
 
 .marquee { fill: rgba(47,128,237,.12); stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
+
+.tmplBtn {
+  display: block; width: 100%; text-align: left;
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px;
+  padding: 7px 10px; font-size: 12px; margin-bottom: 5px;
+}
+.tmplBtn:hover { border-color: var(--accent); background: #eaf0f6; }

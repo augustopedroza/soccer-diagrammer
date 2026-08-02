@@ -169,7 +169,40 @@ export function wavyPath(a: Point, c: Point, b: Point): string {
   return `M${pts.join(' L')}`;
 }
 
-/** Topmost shape under a point, so clicking picks what the eye expects. */
+/** Perpendicular distance from a point to a segment, clamped to its ends. */
+function distToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  const t = clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / len2, 0, 1);
+  return dist(p, { x: a.x + t * dx, y: a.y + t * dy });
+}
+
+/** How far a point is from a line's drawn path, sampled along the curve. */
+export function distToLine(d: Diagram, l: LineShape, p: Point): number {
+  const { a, b } = lineEnds(d, l);
+  const c = controlPoint(a, b, l.bend);
+  let best = Infinity;
+  let prev = pointOnCurve(a, c, b, 0);
+  const N = 40;
+  for (let i = 1; i <= N; i++) {
+    const q = pointOnCurve(a, c, b, i / N);
+    best = Math.min(best, distToSegment(p, prev, q));
+    prev = q;
+  }
+  return best;
+}
+
+/** How close a click has to be to a stroke to count as hitting it. */
+export const LINE_GRAB = 14;
+
+/**
+ * Topmost shape under a point.
+ *
+ * Tokens win over lines when they overlap: a line usually starts or ends on a
+ * player, so testing lines first would make players nearly unclickable.
+ */
 export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): Shape | undefined {
   for (let i = d.shapes.length - 1; i >= 0; i--) {
     const s = d.shapes[i];
@@ -179,7 +212,13 @@ export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): S
       if (Math.abs(p.x - s.x) <= w / 2 + 4 && Math.abs(p.y - s.y) <= h / 2 + 4) return s;
     }
   }
-  return undefined;
+  let closest: { s: Shape; d: number } | undefined;
+  for (const s of d.shapes) {
+    if (s.k !== 'line') continue;
+    const dd = distToLine(d, s, p);
+    if (dd <= LINE_GRAB && (!closest || dd < closest.d)) closest = { s, d: dd };
+  }
+  return closest?.s;
 }
 
 /** The player a line end should attach to, if it was released over one. */

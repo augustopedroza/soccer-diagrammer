@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, deleteShapes, type Tool } from './components/Canvas';
 import { PlayerToken } from './components/Tokens';
 import { EQUIPMENT } from './data/equipment';
+import { FORMATIONS, placements, type Formation } from './data/formations';
 import { COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
-import type { Crop, Diagram, Facing, LineType, Sport, SurfaceStyle } from './types/diagram';
+import { surfaceBox } from './lib/surfaceBox';
+import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
 
@@ -145,6 +147,31 @@ export default function App() {
     setDiagram(res.diagram);
     setSelected(new Set());
     setNotice(res.dropped > 0 ? `Opened. ${res.dropped} unreadable shape(s) were ignored.` : 'Opened.');
+  }
+
+  const [templateTeam, setTemplateTeam] = useState<Team>('own');
+
+  /**
+   * Drops a whole starting XI. Replaces that team's players rather than adding
+   * to them, so pressing two templates in a row does not leave twenty-two
+   * tokens stacked on the pitch.
+   */
+  function applyFormation(f: Formation) {
+    const box = surfaceBox(diagram.surface);
+    let n = 0;
+    const placed: Shape[] = placements(f, templateTeam).map((p) => ({
+      k: 'player',
+      id: `f${Date.now().toString(36)}-${n++}`,
+      team: templateTeam,
+      number: p.number,
+      x: Math.round(p.fx * box.w),
+      y: Math.round(p.fy * box.h),
+    }));
+    commitNow({
+      ...diagram,
+      shapes: [...diagram.shapes.filter((s) => !(s.k === 'player' && s.team === templateTeam)), ...placed],
+    });
+    setSelected(new Set());
   }
 
   const isTool = (t: Tool) =>
@@ -390,6 +417,30 @@ export default function App() {
             </div>
           </section>
 
+
+          <section>
+            <h2>Templates</h2>
+            <div className="segmented">
+              {TEAM_SPECS.map((t) => (
+                <button
+                  key={t.team}
+                  aria-pressed={templateTeam === t.team}
+                  onClick={() => setTemplateTeam(t.team)}
+                >
+                  {t.team === 'own' ? 'My team' : 'Opposition'}
+                </button>
+              ))}
+            </div>
+            <p className="hint">
+              Drops a starting XI in shape. Replaces that team's players; move or
+              renumber them afterwards.
+            </p>
+            {FORMATIONS.map((f) => (
+              <button key={f.id} className="tmplBtn" onClick={() => applyFormation(f)}>
+                {templateTeam === 'own' ? 'My team' : 'Opposition'} {f.label}
+              </button>
+            ))}
+          </section>
         </aside>
       </div>
 

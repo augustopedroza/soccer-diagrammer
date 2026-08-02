@@ -130,7 +130,9 @@ export function Canvas({
       next = selected.has(hit.id) ? selected : new Set([hit.id]);
     }
     onSelect(next);
-    setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+    // Lines are positioned by their ends, so there is nothing to drag on one
+    // directly — selecting it is the whole gesture.
+    if (hit.k !== 'line') setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
   }
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
