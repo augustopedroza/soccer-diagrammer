@@ -67,7 +67,7 @@ export function PlayerToken({
       <text
         // A triangle is widest near its base, so the number sits below the
         // centroid where there is room for two digits.
-        y={team === 'own' ? 10 : 1}
+        y={team === 'own' ? 6 : 1}
         textAnchor="middle"
         dominantBaseline="middle"
         fill={inkOn(fill)}

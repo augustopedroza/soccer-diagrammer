@@ -113,6 +113,11 @@ export default function App() {
     setNotice(res.dropped > 0 ? `Opened. ${res.dropped} unreadable shape(s) were ignored.` : 'Opened.');
   }
 
+  // Lines in the current selection, so their type can be changed after drawing.
+  const selectedLines = diagram.shapes.filter(
+    (s): s is Extract<typeof s, { k: 'line' }> => s.k === 'line' && selected.has(s.id),
+  );
+
   const isTool = (t: Tool) =>
     tool.kind === t.kind &&
     (t.kind !== 'line' || (tool.kind === 'line' && tool.type === t.type)) &&
@@ -247,6 +252,46 @@ export default function App() {
               </div>
             ))}
           </section>
+
+          {selectedLines.length > 0 && (
+            <section>
+              <h2>
+                {selectedLines.length > 1
+                  ? `${selectedLines.length} lines selected`
+                  : 'Selected line'}
+              </h2>
+              <p className="hint">Change what it means — the stroke follows.</p>
+              {LINE_SPECS.map((sp) => {
+                const all = selectedLines.every((l) => l.type === sp.type);
+                return (
+                  <button
+                    key={sp.type}
+                    className={`lineBtn${all ? ' on' : ''}`}
+                    onClick={() =>
+                      commitNow({
+                        ...diagram,
+                        shapes: diagram.shapes.map((sh) =>
+                          sh.k === 'line' && selected.has(sh.id) ? { ...sh, type: sp.type } : sh,
+                        ),
+                      })
+                    }
+                  >
+                    <svg viewBox="0 0 60 16" width="52" height="16" aria-hidden="true">
+                      <path
+                        d={sp.wavy ? 'M2,8 q6,-6 12,0 t12,0 t12,0 t12,0' : 'M2,8 L48,8'}
+                        fill="none"
+                        stroke={sp.stroke}
+                        strokeWidth={2}
+                        strokeDasharray={sp.dash ? '7 5' : undefined}
+                      />
+                      <path d="M0,0 L-8,-4 L-8,4 Z" fill={sp.stroke} transform="translate(56 8)" />
+                    </svg>
+                    <span>{sp.label}</span>
+                  </button>
+                );
+              })}
+            </section>
+          )}
 
           <section>
             <h2>Lines</h2>
