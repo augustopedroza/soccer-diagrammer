@@ -28,6 +28,7 @@ export function PlayerToken({
   x,
   y,
   rot = 0,
+  scale = 1,
   colors = DEFAULT_COLORS,
 }: {
   team: Team;
@@ -35,6 +36,7 @@ export function PlayerToken({
   x: number;
   y: number;
   rot?: number;
+  scale?: number;
   colors?: { own: string; opp: string };
 }) {
   const r = 24;
@@ -62,7 +64,7 @@ export function PlayerToken({
   })();
 
   return (
-    <g transform={`translate(${x} ${y})`} className="token">
+    <g transform={`translate(${x} ${y}) scale(${scale})`} className="token">
       <g transform={`rotate(${rot})`}>
         {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
       </g>
@@ -141,11 +143,13 @@ export function KitMark({
   x,
   y,
   rot = 0,
+  scale = 1,
 }: {
   item: string;
   x: number;
   y: number;
   rot?: number;
+  scale?: number;
 }) {
   const spec = equipmentSpec(item);
   if (!spec) return null;
@@ -363,7 +367,7 @@ export function KitMark({
 
   return (
     <g transform={`translate(${x} ${y})`} className="token">
-      <g transform={`rotate(${rot})`}>{body()}</g>
+      <g transform={`rotate(${rot}) scale(${scale})`}>{body()}</g>
     </g>
   );
 }
@@ -428,6 +432,7 @@ export function PlayerMark({
       x={shape.x}
       y={shape.y}
       rot={shape.rot}
+      scale={shape.scale}
       colors={colors}
     />
   );

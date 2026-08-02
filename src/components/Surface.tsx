@@ -1,6 +1,7 @@
 import {
   CROP_FRACTION,
   FULL_LENGTH,
+  MARGIN,
   cropOffset,
   facingRotation,
   pitchBox,
@@ -222,19 +223,40 @@ export function SurfaceSvg({ surface }: { surface: Surface }) {
 
   return (
     <g transform={transform}>
+      {/* The surface extends past the touchlines by MARGIN on every side, so a
+          goal can sit on the goal line with its net behind it. The striping runs
+          straight through the margin — it is the same field. */}
       {surface.style === 'shaded' ? (
         <>
-          <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill={bandA} />
-          {/* Bands run the length of the pitch and are cut by the crop, so the
-              striping stays continuous rather than restarting per variant. */}
-          {Array.from({ length: 10 }, (_, i) =>
-            i % 2 === 1 ? (
-              <rect key={i} x={0} y={i * bandH} width={pitch.w} height={bandH} fill={bandB} />
-            ) : null,
-          )}
+          <rect
+            x={-MARGIN}
+            y={-MARGIN}
+            width={pitch.w + MARGIN * 2}
+            height={FULL_LENGTH + MARGIN * 2}
+            fill={bandA}
+          />
+          {Array.from({ length: 12 }, (_, i) => {
+            const y = (i - 1) * bandH;
+            return i % 2 === 0 ? (
+              <rect
+                key={i}
+                x={-MARGIN}
+                y={y}
+                width={pitch.w + MARGIN * 2}
+                height={bandH}
+                fill={bandB}
+              />
+            ) : null;
+          })}
         </>
       ) : (
-        <rect x={0} y={0} width={pitch.w} height={FULL_LENGTH} fill="#fff" />
+        <rect
+          x={-MARGIN}
+          y={-MARGIN}
+          width={pitch.w + MARGIN * 2}
+          height={FULL_LENGTH + MARGIN * 2}
+          fill="#fff"
+        />
       )}
       <Marks sport={surface.sport} stroke={stroke} />
     </g>

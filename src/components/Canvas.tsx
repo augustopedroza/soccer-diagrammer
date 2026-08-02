@@ -4,6 +4,7 @@ import { lineSpec } from '../data/notation';
 import { surfaceBox } from '../lib/surfaceBox';
 import {
   bendFor,
+  clamp,
   clampToBox,
   controlPoint,
   dist,
@@ -11,11 +12,12 @@ import {
   lineEnds,
   playerAt,
   pointOnCurve,
+  textBox,
   trimToTokens,
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
+import { MAX_SCALE, MIN_SCALE, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
 import { SurfaceSvg } from './Surface';
 import { KitMark, LineMark, PlayerMark, TextMark } from './Tokens';
 
@@ -27,7 +29,7 @@ export type Tool =
   | { kind: 'text' };
 
 interface Drag {
-  mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend' | 'rotate';
+  mode: 'line' | 'move' | 'marquee' | 'endpoint' | 'bend' | 'rotate' | 'scale';
   start: Point;
   now: Point;
   shift: boolean;
@@ -39,6 +41,9 @@ interface Drag {
   /** For a rotate drag: the pointer angle it started at, and the angles then. */
   fromAngle?: number;
   rotWas?: Record<string, number>;
+  /** For a scale drag: the distance and scale it started at. */
+  fromDist?: number;
+  scaleWas?: number;
 }
 
 /** Half-size of the selection box around a shape, in surface units. */
@@ -48,6 +53,20 @@ const ROTATE_ARM = 26;
 
 const angleAt = (cx: number, cy: number, p: Point) =>
   (Math.atan2(p.y - cy, p.x - cx) * 180) / Math.PI;
+
+const rad = (deg: number) => (deg * Math.PI) / 180;
+
+/**
+ * Where the rotate knob sits once the object has been turned.
+ *
+ * The chrome rotates with the object — a box that stays square while its
+ * contents lean looks like a bug — so the knob orbits with it and the hit test
+ * has to follow rather than assume it is straight up.
+ */
+function knobAt(cx: number, cy: number, boxH: number, rot: number): Point {
+  const d = boxH / 2 + ROTATE_ARM;
+  return { x: cx + Math.sin(rad(rot)) * d, y: cy - Math.cos(rad(rot)) * d };
+}
 
 /** How close a click has to be to a handle to grab it. */
 const HANDLE_GRAB = 16;
@@ -73,16 +92,18 @@ function bendFromPath(path: Point[], a: Point, b: Point): number {
 }
 
 /** The box drawn around a selected token, and used to place its rotate knob. */
-function chromeBox(
-  sh: { k: string; item?: string },
-  kitSize: (id: string) => Point,
-): { w: number; h: number } {
-  if (sh.k === 'kit' && sh.item) {
-    const { x: w, y: h } = kitSize(sh.item);
-    return { w: w + CHROME_PAD * 2, h: h + CHROME_PAD * 2 };
+function chromeBox(sh: Shape, kitSize: (id: string) => Point): { w: number; h: number } {
+  if (sh.k === 'kit') {
+    const base = kitSize(sh.item);
+    return { w: base.x * sh.scale + CHROME_PAD * 2, h: base.y * sh.scale + CHROME_PAD * 2 };
+  }
+  if (sh.k === 'text') {
+    const t = textBox(sh);
+    return { w: t.w + CHROME_PAD * 2, h: t.h + CHROME_PAD * 2 };
   }
   // A player triangle is a little taller than it is wide.
-  return { w: 60 + CHROME_PAD, h: 64 + CHROME_PAD };
+  const scale = sh.k === 'player' ? sh.scale : 1;
+  return { w: (60 + CHROME_PAD) * scale, h: (64 + CHROME_PAD) * scale };
 }
 
 export function Canvas({
@@ -136,9 +157,9 @@ export function Canvas({
     if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
       const shape: Shape =
         tool.kind === 'player'
-          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, ...p }
+          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: 1, ...p }
           : tool.kind === 'kit'
-            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, ...p }
+            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: 1, ...p }
             : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[1], ...p };
       onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
       onSelect(new Set([shape.id]));
@@ -156,8 +177,7 @@ export function Canvas({
     for (const sh of diagram.shapes) {
       if (!selected.has(sh.id) || (sh.k !== 'player' && sh.k !== 'kit')) continue;
       const b = chromeBox(sh, kitSize);
-      const knob = { x: sh.x, y: sh.y - b.h / 2 - ROTATE_ARM };
-      if (dist(p, knob) <= HANDLE_GRAB) {
+      if (dist(p, knobAt(sh.x, sh.y, b.h, sh.rot)) <= HANDLE_GRAB) {
         const rotWas: Record<string, number> = {};
         for (const t of diagram.shapes) {
           if (selected.has(t.id) && (t.k === 'player' || t.k === 'kit')) rotWas[t.id] = t.rot;
@@ -171,6 +191,38 @@ export function Canvas({
           lineId: sh.id,
           fromAngle: angleAt(sh.x, sh.y, p),
           rotWas,
+        });
+        return;
+      }
+    }
+
+    // Corners resize, but only equipment and labels. A player token is a fixed
+    // notational mark — one drawn larger than another would imply something the
+    // notation does not define — so players get a box with no corner grips.
+    for (const sh of diagram.shapes) {
+      if (!selected.has(sh.id) || sh.k === 'line') continue;
+      const b = chromeBox(sh, kitSize);
+      const half = { x: b.w / 2, y: b.h / 2 };
+      const theta = rad(sh.k === 'text' ? 0 : sh.rot);
+      const corners = [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ].map(([sx, sy]) => ({
+        x: sh.x + (sx * half.x * Math.cos(theta) - sy * half.y * Math.sin(theta)),
+        y: sh.y + (sx * half.x * Math.sin(theta) + sy * half.y * Math.cos(theta)),
+      }));
+      if (corners.some((c) => dist(p, c) <= HANDLE_GRAB)) {
+        setDrag({
+          mode: 'scale',
+          start: p,
+          now: p,
+          shift: false,
+          path: [p],
+          lineId: sh.id,
+          fromDist: Math.max(6, dist(p, { x: sh.x, y: sh.y })),
+          scaleWas: sh.k === 'text' ? sh.size : sh.scale,
         });
         return;
       }
@@ -243,6 +295,27 @@ export function Canvas({
               const raw = was + delta;
               const snapped = e.shiftKey ? Math.round(raw / 15) * 15 : raw;
               return { ...sh, rot: ((snapped % 360) + 360) % 360 };
+            }),
+          },
+          false,
+        );
+      }
+    }
+
+    if (drag.mode === 'scale' && drag.lineId && drag.fromDist && drag.scaleWas !== undefined) {
+      const target = diagram.shapes.find((sh) => sh.id === drag.lineId);
+      if (target && target.k !== 'line') {
+        const ratio = dist(p, { x: target.x, y: target.y }) / drag.fromDist;
+        onChange(
+          {
+            ...diagram,
+            shapes: diagram.shapes.map((sh) => {
+              if (sh.id !== drag.lineId) return sh;
+              if (sh.k === 'text') return { ...sh, size: clamp(drag.scaleWas! * ratio, 14, 90) };
+              if (sh.k === 'player' || sh.k === 'kit') {
+                return { ...sh, scale: clamp(drag.scaleWas! * ratio, MIN_SCALE, MAX_SCALE) };
+              }
+              return sh;
             }),
           },
           false,
@@ -369,7 +442,7 @@ export function Canvas({
       );
     }
 
-    if (drag.mode === 'rotate') onChange(diagram, true);
+    if (drag.mode === 'rotate' || drag.mode === 'scale') onChange(diagram, true);
     if (drag.mode === 'bend') onChange(diagram, true);
     if (drag.mode === 'move') onChange(diagram, true);
     setDrag(null);
@@ -472,7 +545,7 @@ export function Canvas({
         s.k === 'player' ? (
           <PlayerMark key={s.id} shape={s} colors={diagram.colors} />
         ) : s.k === 'kit' ? (
-          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} rot={s.rot} />
+          <KitMark key={s.id} item={s.item} x={s.x} y={s.y} rot={s.rot} scale={s.scale} />
         ) : s.k === 'text' ? (
           <TextMark key={s.id} shape={s} selected={selected.has(s.id)} />
         ) : null,
@@ -490,33 +563,50 @@ export function Canvas({
           above it. Rotating from the drawing itself keeps the gesture where the
           object is rather than in a panel across the screen. */}
       {diagram.shapes.map((sh) => {
-        if (!selected.has(sh.id) || (sh.k !== 'player' && sh.k !== 'kit')) return null;
+        const chromed = sh.k === 'player' || sh.k === 'kit' || sh.k === 'text';
+        if (!selected.has(sh.id) || !chromed) return null;
         const b = chromeBox(sh, kitSize);
-        const x = sh.x - b.w / 2;
-        const y = sh.y - b.h / 2;
-        const knobY = y - ROTATE_ARM;
+        const rot = sh.k === 'text' ? 0 : sh.rot;
+        const canResize = true;
+        const canRotate = sh.k === 'player' || sh.k === 'kit';
+        const knobY = -b.h / 2 - ROTATE_ARM;
         return (
-          <g key={`c${sh.id}`} className="chrome">
-            <rect x={x} y={y} width={b.w} height={b.h} className="chromeBox" />
-            {[
-              [x, y],
-              [x + b.w, y],
-              [x, y + b.h],
-              [x + b.w, y + b.h],
-            ].map(([hx, hy], i) => (
-              <rect key={i} x={hx - 4} y={hy - 4} width={8} height={8} className="chromeCorner" />
-            ))}
-            <line x1={sh.x} y1={y} x2={sh.x} y2={knobY + 8} className="chromeArm" />
-            <circle cx={sh.x} cy={knobY} r={9} className="chromeKnob" />
-            <path
-              d={`M ${sh.x - 4.6} ${knobY - 1.4}
-                  A 4.6 4.6 0 1 1 ${sh.x - 2.4} ${knobY + 3.6}`}
-              className="chromeKnobIcon"
-            />
-            <path
-              d={`M ${sh.x - 7} ${knobY - 3.4} L ${sh.x - 2.4} ${knobY - 2.2} L ${sh.x - 4.2} ${knobY + 1.6} Z`}
-              className="chromeKnobArrow"
-            />
+          <g
+            key={`c${sh.id}`}
+            className="chrome"
+            transform={`translate(${sh.x} ${sh.y}) rotate(${rot})`}
+          >
+            <rect x={-b.w / 2} y={-b.h / 2} width={b.w} height={b.h} className="chromeBox" />
+            {canResize &&
+              [
+                [-1, -1],
+                [1, -1],
+                [-1, 1],
+                [1, 1],
+              ].map(([sx, sy], i) => (
+                <rect
+                  key={i}
+                  x={(sx * b.w) / 2 - 4}
+                  y={(sy * b.h) / 2 - 4}
+                  width={8}
+                  height={8}
+                  className="chromeCorner"
+                />
+              ))}
+            {canRotate && (
+              <>
+                <line x1={0} y1={-b.h / 2} x2={0} y2={knobY + 8} className="chromeArm" />
+                <circle cx={0} cy={knobY} r={9} className="chromeKnob" />
+                <path
+                  d={`M -4.6 ${knobY - 1.4} A 4.6 4.6 0 1 1 -2.4 ${knobY + 3.6}`}
+                  className="chromeKnobIcon"
+                />
+                <path
+                  d={`M -7 ${knobY - 3.4} L -2.4 ${knobY - 2.2} L -4.2 ${knobY + 1.6} Z`}
+                  className="chromeKnobArrow"
+                />
+              </>
+            )}
           </g>
         );
       })}

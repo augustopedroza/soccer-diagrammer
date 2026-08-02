@@ -1,6 +1,6 @@
 import { EQUIPMENT_IDS } from '../data/equipment';
 import { ALL_NUMBERS, DEFAULT_COLORS } from '../data/notation';
-import { MAX_COORD, MAX_LABEL, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
+import { MAX_COORD, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
 
 export const FILE_KIND = 'soccer-session-diagram';
 export const FILE_VERSION = 1;
@@ -107,14 +107,22 @@ export function parse(text: string): ParseResult {
         dropped++;
         continue;
       }
-      shapes.push({ k: 'player', id, team: sh.team, number: n, x, y, rot: rot(sh.rot) });
+      shapes.push({
+        k: 'player', id, team: sh.team, number: n, x, y,
+        rot: rot(sh.rot),
+        scale: num(sh.scale, MIN_SCALE, MAX_SCALE) ?? 1,
+      });
       seen.add(id);
     } else if (sh.k === 'kit' && x !== null && y !== null) {
       if (typeof sh.item !== 'string' || !EQUIPMENT_IDS.has(sh.item)) {
         dropped++;
         continue;
       }
-      shapes.push({ k: 'kit', id, item: sh.item, x, y, rot: rot(sh.rot) });
+      shapes.push({
+        k: 'kit', id, item: sh.item, x, y,
+        rot: rot(sh.rot),
+        scale: num(sh.scale, MIN_SCALE, MAX_SCALE) ?? 1,
+      });
       seen.add(id);
     } else if (sh.k === 'text' && x !== null && y !== null) {
       if (typeof sh.text !== 'string') {

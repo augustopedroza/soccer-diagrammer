@@ -13,6 +13,14 @@ import type { Crop, Sport, Surface } from '../types/diagram';
 
 export const FULL_LENGTH = 1000;
 
+/**
+ * Grass beyond the touchlines, in surface units — about six metres.
+ *
+ * Without it the pitch runs to the very edge of the drawing and anything placed
+ * on a line, a goal most obviously, hangs half outside and gets clamped back in.
+ */
+export const MARGIN = 58;
+
 /** width : length, portrait. 68 x 105 m pitch; 20 x 40 m futsal court. */
 const ASPECT: Record<Sport, number> = {
   soccer: 68 / 105,
@@ -44,7 +52,8 @@ export function pitchBox(sport: Sport): Box {
 export function surfaceBox(s: Surface): Box {
   const { w } = pitchBox(s.sport);
   const h = FULL_LENGTH * CROP_FRACTION[s.crop];
-  return isRotated(s) ? { w: h, h: w } : { w, h };
+  const box = { w: w + MARGIN * 2, h: h + MARGIN * 2 };
+  return isRotated(s) ? { w: box.h, h: box.w } : box;
 }
 
 /**

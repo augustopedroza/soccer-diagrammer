@@ -216,9 +216,11 @@ export const LINE_GRAB = 14;
 export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): Shape | undefined {
   for (let i = d.shapes.length - 1; i >= 0; i--) {
     const s = d.shapes[i];
-    if (s.k === 'player' && dist(p, s) <= PLAYER_RADIUS + 4) return s;
+    if (s.k === 'player' && dist(p, s) <= PLAYER_RADIUS * s.scale + 4) return s;
     if (s.k === 'kit') {
-      const { x: w, y: h } = kitSize(s.item);
+      const base = kitSize(s.item);
+      const w = base.x * s.scale;
+      const h = base.y * s.scale;
       if (Math.abs(p.x - s.x) <= w / 2 + 4 && Math.abs(p.y - s.y) <= h / 2 + 4) return s;
     }
     if (s.k === 'text') {
@@ -240,5 +242,5 @@ export function playerAt(d: Diagram, p: Point): PlayerShape | undefined {
   return players(d)
     .slice()
     .reverse()
-    .find((pl) => dist(p, pl) <= PLAYER_RADIUS + 6);
+    .find((pl) => dist(p, pl) <= PLAYER_RADIUS * pl.scale + 6);
 }

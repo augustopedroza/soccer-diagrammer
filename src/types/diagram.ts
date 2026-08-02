@@ -38,6 +38,8 @@ export interface PlayerShape {
   y: number;
   /** Degrees clockwise. A rotated triangle shows which way a player faces. */
   rot: number;
+  /** Multiplier on the token's size. */
+  scale: number;
 }
 
 export interface LineShape {
@@ -71,6 +73,8 @@ export interface KitShape {
   y: number;
   /** Degrees clockwise. */
   rot: number;
+  /** Multiplier on the item's footprint. Equipment varies in real life. */
+  scale: number;
 }
 
 export type Shape = PlayerShape | LineShape | KitShape | TextShape;
@@ -97,6 +101,8 @@ export interface Diagram {
 export const MAX_COORD = 1000;
 
 export const ROTATE_STEP = 15;
+export const MIN_SCALE = 0.4;
+export const MAX_SCALE = 3;
 
 export const TEXT_SIZES = [22, 32, 46] as const;
 export const MAX_LABEL = 120;

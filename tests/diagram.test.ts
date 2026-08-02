@@ -24,9 +24,9 @@ function withPlayers(): Diagram {
   const d = emptyDiagram();
   d.title = 'Tuesday — breaking lines';
   d.shapes = [
-    { k: 'player', id: 'p1', team: 'own', number: 6, x: 300, y: 700, rot: 0 },
-    { k: 'player', id: 'p2', team: 'own', number: 10, x: 600, y: 400, rot: 0 },
-    { k: 'player', id: 'p3', team: 'opp', number: 4, x: 500, y: 500, rot: 0 },
+    { k: 'player', id: 'p1', team: 'own', number: 6, x: 300, y: 700, rot: 0, scale: 1 },
+    { k: 'player', id: 'p2', team: 'own', number: 10, x: 600, y: 400, rot: 0, scale: 1 },
+    { k: 'player', id: 'p3', team: 'opp', number: 4, x: 500, y: 500, rot: 0, scale: 1 },
     {
       k: 'line',
       id: 'l1',
@@ -250,6 +250,26 @@ describe('labels', () => {
     expect(r.diagram.shapes).toHaveLength(1);
     expect(r.diagram.shapes[0]).toMatchObject({ id: 'ok', size: 32 });
     expect(r.dropped).toBe(1);
+  });
+
+  it('keeps an out-of-range equipment scale inside its bounds', () => {
+    const r = parse(
+      JSON.stringify({
+        kind: FILE_KIND,
+        version: FILE_VERSION,
+        diagram: {
+          shapes: [
+            { k: 'kit', id: 'a', item: 'cone', x: 10, y: 10, rot: 0, scale: 99 },
+            { k: 'kit', id: 'b', item: 'cone', x: 20, y: 20, rot: 0, scale: 1.5 },
+          ],
+        },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const [a, b] = r.diagram.shapes as { scale: number }[];
+    expect(a.scale).toBe(1);
+    expect(b.scale).toBe(1.5);
   });
 
   it('sizes its hit box from the glyph count', () => {

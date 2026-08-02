@@ -85,6 +85,52 @@ export default function App() {
     [diagram, selected, selectedLines.length, commitNow],
   );
 
+  /**
+   * Drops a copy of some shapes, offset so the copy is visibly a copy.
+   *
+   * Anchored lines are re-pointed at the copied players where both ends came
+   * along — otherwise pasting a pass would leave the new line still attached to
+   * the original players, which is never what was meant.
+   */
+  const pasteShapes = useCallback(
+    (shapes: Shape[], offset = 40) => {
+      if (shapes.length === 0) return;
+      const idMap = new Map<string, string>();
+      const stamp = Date.now().toString(36);
+      shapes.forEach((sh, i) => idMap.set(sh.id, `c${stamp}-${i}`));
+
+      const remap = (e: { ref: string } | { x: number; y: number }) =>
+        'ref' in e
+          ? idMap.has(e.ref)
+            ? { ref: idMap.get(e.ref)! }
+            : { ref: e.ref }
+          : { x: e.x + offset, y: e.y + offset };
+
+      const copies: Shape[] = shapes.map((sh) => {
+        const id = idMap.get(sh.id)!;
+        if (sh.k === 'line') {
+          return {
+            ...sh,
+            id,
+            from: remap(sh.from),
+            to: remap(sh.to),
+            lastFrom: { x: sh.lastFrom.x + offset, y: sh.lastFrom.y + offset },
+            lastTo: { x: sh.lastTo.x + offset, y: sh.lastTo.y + offset },
+          };
+        }
+        return { ...sh, id, x: sh.x + offset, y: sh.y + offset };
+      });
+
+      setDiagram((prev) => {
+        past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+        future.current = [];
+        return { ...prev, shapes: [...prev.shapes, ...copies] };
+      });
+      setSelected(new Set(copies.map((c) => c.id)));
+    },
+    [],
+  );
+
   /** Turns everything selected that has a facing. Labels and lines have none. */
   const rotateSelected = useCallback(
     (deltaOrAbsolute: number, absolute = false) => {
@@ -128,6 +174,28 @@ export default function App() {
         e.preventDefault();
         setSelected(new Set(diagram.shapes.map((s) => s.id)));
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+        clipboard.current = diagram.shapes.filter((sh) => selected.has(sh.id));
+        if (clipboard.current.length > 0) {
+          setNotice(`Copied ${clipboard.current.length}.`);
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x') {
+        clipboard.current = diagram.shapes.filter((sh) => selected.has(sh.id));
+        if (clipboard.current.length > 0) {
+          commitNow(deleteShapes(diagram, selected));
+          setSelected(new Set());
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        pasteShapes(clipboard.current);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        // Duplicate in place, without disturbing what was copied.
+        e.preventDefault();
+        pasteShapes(diagram.shapes.filter((sh) => selected.has(sh.id)));
+      }
       if (e.key === 'Escape') {
         setTool({ kind: 'select' });
         setSelected(new Set());
@@ -147,7 +215,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, selected, diagram, commitNow, applyLine, rotateSelected]);
+  }, [undo, redo, selected, diagram, commitNow, applyLine, rotateSelected, pasteShapes]);
 
   const setSurface = (patch: Partial<Diagram['surface']>) =>
     commitNow({ ...diagram, surface: { ...diagram.surface, ...patch } });
@@ -181,6 +249,8 @@ export default function App() {
 
   const [templateTeam, setTemplateTeam] = useState<Team>('own');
   const labelInput = useRef<HTMLInputElement>(null);
+  /** Kept in the app, not the system clipboard — nothing leaves the page. */
+  const clipboard = useRef<Shape[]>([]);
 
   const selectedLabels = diagram.shapes.filter(
     (s): s is Extract<typeof s, { k: 'text' }> => s.k === 'text' && selected.has(s.id),
@@ -229,6 +299,7 @@ export default function App() {
       team: templateTeam,
       number: p.number,
       rot: 0,
+      scale: 1,
       x: Math.round(p.fx * box.w),
       y: Math.round(p.fy * box.h),
     }));
@@ -471,9 +542,10 @@ export default function App() {
               Clear the field
             </button>
             <p className="hint">
-              Shift-click to add to a selection, or drag a box on empty grass. Moving
-              or deleting applies to everything selected. Turn a player or a piece
-              of equipment by the handle above it — hold Shift to snap.
+              Shift-click to add to a selection, or drag a box on empty grass.
+              Moving, deleting, copying and resizing apply to everything selected.
+              Turn something by the handle above it and resize it by a corner; hold
+              Shift while turning to snap. ⌘C, ⌘X, ⌘V and ⌘D do what you expect.
             </p>
           </section>
         </aside>
