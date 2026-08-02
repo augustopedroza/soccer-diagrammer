@@ -17,9 +17,14 @@ action; the stroke follows from it.
 | Run off the ball | dashed line, arrow head |
 | Tactical arrow | solid red line, arrow head |
 
-Players are placed by positional number, so a diagram reads without a key. Your
-team is a pennant, the opposition a disc — two *shapes*, not just two colours, so
-a diagram survives being printed in grey. Kit colours are yours to set.
+Your team is a triangle pointing up — the way the notation has you attacking, so
+the token itself carries the direction of play — and the opposition is a disc.
+Two *shapes*, not just two colours, so a diagram survives being printed in grey
+or read by someone who cannot separate the two hues. Kit colours are yours to
+set.
+
+Players can carry a positional number or none at all. A small-sided game is four
+attackers, not the 2, 6, 8 and 10, so those go down blank.
 
 ## Drawing
 
@@ -29,9 +34,17 @@ a diagram survives being printed in grey. Kit colours are yours to set.
 - **Curve**: hold **Shift** and drag in an arc. The bow follows the path you drew.
 - **Attach**: release a line end over a player and it anchors there. Move that
   player and the line follows, changing length and angle with them.
-- **Select**: click, Shift-click to add, or drag a box on empty ground. Moving and
-  deleting apply to everything selected. `⌘A` selects all.
-- **Undo / redo**: `⌘Z` and `⇧⌘Z`.
+- **Select**: click, Shift-click to add, or drag a box on empty ground. Several
+  things selected become one object: drag anywhere inside the frame to move them
+  all, turn them by the handle above it, resize by a corner. `⌘A` selects all.
+- **Number a player**: double-click it and press Enter, or type with it selected
+  — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
+- **Undo / redo**: `⌘Z` and `⇧⌘Z`. Copy, cut, paste and duplicate are `⌘C`,
+  `⌘X`, `⌘V`, `⌘D`.
+
+Templates drop a small-sided game (1v1 up to 5v5, or any N v M) or a full
+starting XI in one of five shapes. Labels, equipment and a printable sheet round
+it out; a session is saved by downloading a file and reopened from one.
 
 ## Surfaces
 
