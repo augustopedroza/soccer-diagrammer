@@ -113,6 +113,15 @@ export const ROTATE_STEP = 15;
 export const MIN_SCALE = 0.4;
 export const MAX_SCALE = 3;
 
+/**
+ * How big a token or piece of equipment is when it is first placed.
+ *
+ * Below 1 deliberately: at full size a back four filled the width of the
+ * penalty area, and a session diagram usually wants room for the shape rather
+ * than for the markers. Everything is still resizable by its corners.
+ */
+export const DEFAULT_SCALE = 0.8;
+
 export const TEXT_SIZES = [22, 32, 46] as const;
 export const MAX_LABEL = 120;
 

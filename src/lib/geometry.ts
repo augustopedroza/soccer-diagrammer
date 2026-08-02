@@ -207,9 +207,9 @@ export function strokeGeometry(
   a: Point,
   b: Point,
   bend: number,
-  trimA: boolean,
-  trimB: boolean,
-  r = PLAYER_RADIUS + TOKEN_GAP,
+  /** How far to hold off each end, in surface units. 0 leaves that end alone. */
+  rA: number,
+  rB: number,
 ): StrokeGeometry {
   const c = controlPoint(a, b, bend);
   const STEPS = 96;
@@ -222,7 +222,7 @@ export function strokeGeometry(
    * as one step — on a long curve that is a visibly bigger gap than on a short
    * one, which makes the same rule look like two different rules.
    */
-  const crossing = (anchor: Point, from: 0 | 1): number => {
+  const crossing = (anchor: Point, r: number, from: 0 | 1): number => {
     const at = (t: number) => dist(pointOnCurve(a, c, b, t), anchor);
     let prev: number = from;
     for (let i = 1; i <= STEPS; i++) {
@@ -242,8 +242,8 @@ export function strokeGeometry(
     return from;
   };
 
-  const t0 = trimA ? crossing(a, 0) : 0;
-  const t1 = trimB ? crossing(b, 1) : 1;
+  const t0 = rA > 0 ? crossing(a, rA, 0) : 0;
+  const t1 = rB > 0 ? crossing(b, rB, 1) : 1;
   // Too short to trim: better a line that runs under a token than no line.
   // Too short to trim: better a line that runs under a token than one whose
   // head has crossed over its own tail.
@@ -261,9 +261,22 @@ export function strokeGeometry(
   };
 }
 
+/**
+ * How far a line should stop short of the token at one end.
+ *
+ * Scaled by that player's own size: the hold-off is meant to be a constant ring
+ * of clear air around the token, so a fixed distance leaves a smaller player
+ * marooned at the end of a gap.
+ */
+export function holdOff(d: Diagram, e: Endpoint): number {
+  if (!isRef(e)) return 0;
+  const p = playerById(d, e.ref);
+  return PLAYER_RADIUS * (p?.scale ?? 1) + TOKEN_GAP;
+}
+
 export function lineGeometry(d: Diagram, l: LineShape): StrokeGeometry {
   const { a, b } = lineEnds(d, l);
-  return strokeGeometry(a, b, l.bend, isRef(l.from), isRef(l.to));
+  return strokeGeometry(a, b, l.bend, holdOff(d, l.from), holdOff(d, l.to));
 }
 
 /** Perpendicular distance from a point to a segment, clamped to its ends. */

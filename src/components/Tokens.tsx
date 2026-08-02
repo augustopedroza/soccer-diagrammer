@@ -333,42 +333,45 @@ export function KitMark({
           </>
         );
       case 'cone': {
-        // A training cone in elevation: a narrow tapered body standing on a
-        // wider base plate, with the usual reflective band. The body used to be
-        // almost as wide as its base, which read as an orange blob rather than
-        // as a cone.
-        const baseY = h / 2 - 5;
+        // A soccer marker cone, not a traffic cone.
+        //
+        // The difference is the proportions and the flange: a marker is squat —
+        // wider than it is tall — with a broad skirt it can be trodden on
+        // without hurting anyone, a blunt top, and no reflective band. Drawn
+        // tall and banded, it read as roadworks on the touchline.
+        const baseY = h / 2 - h * 0.16;
+        const flangeRy = h * 0.15;
         const bodyHalf = w * 0.3;
-        const tipY = -h / 2 + 1;
-        const clipId = `cone-${Math.round(w * 10)}`;
-        const body = `M0,${tipY}
-          C ${bodyHalf * 0.42},${tipY + h * 0.34} ${bodyHalf * 0.7},${baseY - h * 0.28} ${bodyHalf},${baseY}
-          L ${-bodyHalf},${baseY}
-          C ${-bodyHalf * 0.7},${baseY - h * 0.28} ${-bodyHalf * 0.42},${tipY + h * 0.34} 0,${tipY} Z`;
+        const tipHalf = w * 0.075;
+        const tipY = -h / 2 + 1.5;
+        const body = `M ${-bodyHalf},${baseY}
+          C ${-bodyHalf * 0.92},${baseY - h * 0.4} ${-tipHalf * 1.5},${tipY + h * 0.22} ${-tipHalf},${tipY + 1}
+          Q 0,${tipY - 1.2} ${tipHalf},${tipY + 1}
+          C ${tipHalf * 1.5},${tipY + h * 0.22} ${bodyHalf * 0.92},${baseY - h * 0.4} ${bodyHalf},${baseY}
+          Q 0,${baseY + 3} ${-bodyHalf},${baseY} Z`;
         return (
           <>
-            <defs>
-              <clipPath id={clipId}>
-                <path d={body} />
-              </clipPath>
-            </defs>
-            {/* Base plate, drawn first so the body sits on it. */}
-            <rect
-              x={-w / 2}
-              y={baseY}
-              width={w}
-              height={5}
-              rx={2}
+            {/* The skirt, drawn first so the body stands on it. Its far edge
+                shows behind the body, which is what makes it read as a disc
+                lying on the grass rather than a rectangle behind a cone. */}
+            <ellipse
+              cy={baseY}
+              rx={w / 2}
+              ry={flangeRy}
               fill="#c25c12"
               stroke={stroke}
               strokeWidth={1}
             />
             <path d={body} fill={orange} stroke={stroke} strokeWidth={1.1} strokeLinejoin="round" />
-            <g clipPath={`url(#${clipId})`}>
-              <rect x={-w} y={-h * 0.06} width={w * 2} height={h * 0.2} fill="#fff" fillOpacity={0.82} />
-              {/* A soft highlight down the lit side. */}
-              <rect x={-bodyHalf} y={tipY} width={bodyHalf * 0.5} height={h} fill="#fff" fillOpacity={0.16} />
-            </g>
+            {/* A soft highlight down the lit side, following the taper. */}
+            <path
+              d={`M ${-bodyHalf * 0.62},${baseY - 1}
+                  C ${-bodyHalf * 0.6},${baseY - h * 0.34} ${-tipHalf * 1.1},${tipY + h * 0.24} ${-tipHalf * 0.5},${tipY + 2.5}
+                  L ${-tipHalf * 0.05},${tipY + 2.5}
+                  C ${-tipHalf * 0.5},${tipY + h * 0.3} ${-bodyHalf * 0.2},${baseY - h * 0.3} ${-bodyHalf * 0.2},${baseY - 1} Z`}
+              fill="#fff"
+              fillOpacity={0.2}
+            />
           </>
         );
       }

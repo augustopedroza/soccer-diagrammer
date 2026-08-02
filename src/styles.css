@@ -267,8 +267,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chromeKnob { fill: #fff; stroke: #2f80ed; stroke-width: 2.2; cursor: grab; }
 .chromeKnobIcon { fill: none; stroke: #2f80ed; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
 .chromeKnobArrow { fill: #2f80ed; pointer-events: none; }
+.chromeGrab { fill: transparent; }
+.canvas.tool-select .chromeGrab { cursor: grab; }
 .chrome { pointer-events: none; }
-.chrome .chromeKnob, .chrome .chromeCorner { pointer-events: auto; }
+.chrome .chromeKnob, .chrome .chromeCorner, .chrome .chromeGrab { pointer-events: auto; }
 
 .handle { fill: #fff; stroke: #2f80ed; stroke-width: 2.5; cursor: grab; }
 .handleBend { fill: #2f80ed; stroke: #fff; }

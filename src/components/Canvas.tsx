@@ -10,6 +10,8 @@ import {
   dist,
   hitTest,
   lineEnds,
+  PLAYER_RADIUS,
+  TOKEN_GAP,
   playerAt,
   pointOnCurve,
   rotatePt,
@@ -19,7 +21,7 @@ import {
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { ROTATE_STEP, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
+import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
 import { SurfaceSvg } from './Surface';
 import { KitMark, LineMark, PlayerMark, TextMark } from './Tokens';
 
@@ -57,6 +59,8 @@ interface Drag {
 
 /** Half-size of the selection box around a shape, in surface units. */
 const CHROME_PAD = 6;
+/** The same, around a group — wider, to keep its grips off its members. */
+const GROUP_PAD = 18;
 /** How far above the box the rotate handle floats. */
 const ROTATE_ARM = 26;
 
@@ -185,11 +189,22 @@ function selectionFrame(
   const y2 = Math.max(...local.map((p) => p.y));
   return {
     pivot: rotatePt({ x: (x1 + x2) / 2, y: (y1 + y2) / 2 }, seed, groupRot),
-    w: Math.max(24, x2 - x1 + CHROME_PAD * 2),
-    h: Math.max(24, y2 - y1 + CHROME_PAD * 2),
+    // Roomier than a single token's box, so the corner grips sit clear of
+    // whatever is at the edge of the group rather than on top of it — grabbing
+    // the corner player to move the shape would otherwise resize it.
+    w: Math.max(24, x2 - x1 + GROUP_PAD * 2),
+    h: Math.max(24, y2 - y1 + GROUP_PAD * 2),
     rot: groupRot,
     group: true,
   };
+}
+
+/** Is this point inside the frame — including where the frame has been turned? */
+function insideFrame(f: Frame, p: Point): boolean {
+  const local = rotatePt(p, f.pivot, -f.rot);
+  return (
+    Math.abs(local.x - f.pivot.x) <= f.w / 2 && Math.abs(local.y - f.pivot.y) <= f.h / 2
+  );
 }
 
 /** The four corner points of a frame, in surface coordinates. */
@@ -277,9 +292,9 @@ export function Canvas({
     if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
       const shape: Shape =
         tool.kind === 'player'
-          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: 1, ...p }
+          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: DEFAULT_SCALE, ...p }
           : tool.kind === 'kit'
-            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: 1, ...p }
+            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: DEFAULT_SCALE, ...p }
             : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[0], rot: 0, ...p };
       onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
       onSelect(new Set([shape.id]));
@@ -351,8 +366,16 @@ export function Canvas({
     const additive = e.shiftKey || e.metaKey || e.ctrlKey;
 
     if (!hit) {
-      // Empty space starts a marquee. Without a modifier it also clears, so a
-      // stray click does not silently keep an old selection alive.
+      // Inside a group's frame, empty space still drags the group. A gap
+      // between two players is part of the thing you have hold of; treating it
+      // as bare grass made a multi-selection undraggable except by its members,
+      // and a drag there wiped the selection instead.
+      if (!additive && frame?.group && insideFrame(frame, p)) {
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        return;
+      }
+      // Otherwise empty space starts a marquee. Without a modifier it also
+      // clears, so a stray click does not silently keep an old selection alive.
       if (!additive) onSelect(new Set());
       setDrag({ mode: 'marquee', start: p, now: p, shift: additive, path: [p] });
       return;
@@ -432,14 +455,25 @@ export function Canvas({
     if (drag.mode === 'move') {
       const dx = p.x - drag.now.x;
       const dy = p.y - drag.now.y;
+      const shift = (q: Point) => clampToBox({ x: q.x + dx, y: q.y + dy }, box);
       onChange(
         {
           ...diagram,
-          shapes: diagram.shapes.map((s) =>
-            selected.has(s.id) && (s.k === 'player' || s.k === 'kit' || s.k === 'text')
-              ? { ...s, ...clampToBox({ x: s.x + dx, y: s.y + dy }, box) }
-              : s,
-          ),
+          shapes: diagram.shapes.map((s) => {
+            if (!selected.has(s.id)) return s;
+            if (s.k === 'line') {
+              // A selected line travels too, but only its free ends: an
+              // anchored end is already following its player.
+              return {
+                ...s,
+                from: isRef(s.from) ? s.from : shift(s.from),
+                to: isRef(s.to) ? s.to : shift(s.to),
+                lastFrom: shift(s.lastFrom),
+                lastTo: shift(s.lastTo),
+              };
+            }
+            return { ...s, ...shift(s) };
+          }),
         },
         false,
       );
@@ -552,7 +586,11 @@ export function Canvas({
     const bend = drag.shift ? bendFromPath(drag.path, a, b) : 0;
     // Same geometry the finished line will use, so the preview does not jump
     // when the pointer comes up.
-    const g = strokeGeometry(a, b, bend, !!playerAt(diagram, a), !!playerAt(diagram, b));
+    const holdOffAt = (q: Point) => {
+      const pl = playerAt(diagram, q);
+      return pl ? PLAYER_RADIUS * pl.scale + TOKEN_GAP : 0;
+    };
+    const g = strokeGeometry(a, b, bend, holdOffAt(a), holdOffAt(b));
     const head = g.head;
     const d = spec.wavy
       ? wavyPath(g.a, g.c, g.b)
@@ -677,6 +715,18 @@ export function Canvas({
           className="chrome"
           transform={`translate(${frame.pivot.x} ${frame.pivot.y}) rotate(${frame.rot})`}
         >
+          {/* The interior carries the grab cursor, so the whole selection reads
+              as one thing you can pick up. Hit-testing is done in surface
+              coordinates, so this only affects the cursor. */}
+          {frame.group && (
+            <rect
+              x={-frame.w / 2}
+              y={-frame.h / 2}
+              width={frame.w}
+              height={frame.h}
+              className="chromeGrab"
+            />
+          )}
           <rect
             x={-frame.w / 2}
             y={-frame.h / 2}

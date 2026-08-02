@@ -24,7 +24,8 @@ export const EQUIPMENT: EquipmentSpec[] = [
 
   { id: 'ball', label: 'Ball', group: 'Other', w: 26, h: 26 },
   { id: 'cap', label: 'Cap', group: 'Other', w: 30, h: 18 },
-  { id: 'cone', label: 'Cone', group: 'Other', w: 28, h: 30 },
+  // Wider than it is tall: a marker cone's skirt is about twice its height.
+  { id: 'cone', label: 'Cone', group: 'Other', w: 30, h: 22 },
   { id: 'dummy', label: 'Dummy', group: 'Other', w: 32, h: 54 },
   { id: 'ladder', label: 'Ladder', group: 'Other', w: 110, h: 26 },
   { id: 'pole', label: 'Pole', group: 'Other', w: 18, h: 62 },

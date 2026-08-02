@@ -16,7 +16,7 @@ import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } fro
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
 import { confineToBox, wavyPath } from './lib/geometry';
 import { surfaceBox } from './lib/surfaceBox';
-import { ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
+import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
@@ -407,7 +407,7 @@ export default function App() {
       team: templateTeam,
       number: p.number,
       rot: 0,
-      scale: 1,
+      scale: DEFAULT_SCALE,
       x: Math.round(p.fx * box.w),
       y: Math.round(p.fy * box.h),
     }));
@@ -435,7 +435,7 @@ export default function App() {
         team,
         number: null,
         rot: 0,
-        scale: 1,
+        scale: DEFAULT_SCALE,
         x: Math.round(p.fx * box.w),
         y: Math.round(p.fy * box.h),
       }));
