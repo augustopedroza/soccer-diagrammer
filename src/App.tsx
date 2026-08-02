@@ -449,6 +449,9 @@ export default function App() {
         </aside>
 
         <main className="stage">
+          {/* Titles the printed sheet; hidden on screen, where the field at the
+              top of the window already carries it. */}
+          <h2 className="printTitle">{diagram.title || 'Session diagram'}</h2>
           <Canvas
             diagram={diagram}
             tool={tool}

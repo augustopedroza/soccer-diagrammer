@@ -138,10 +138,39 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 @media print {
-  .app { height: auto; overflow: visible; }
-  .bar, .palette, .foot, .notice { display: none !important; }
-  .work { padding: 0; }
-  .canvas { border: 0; max-width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Block layout, deliberately. On screen the canvas takes its height from a
+     chain of flex parents; on paper .app has no fixed height, so `height: 100%`
+     resolved to nothing and the SVG collapsed — the page came out blank. As a
+     block with `height: auto`, it sizes itself from its own viewBox ratio. */
+  @page { margin: 12mm; }
+
+  html, body, #root { height: auto; }
+  .app { display: block; height: auto; overflow: visible; }
+  .bar, .palette, .kitRail, .foot, .notice { display: none !important; }
+  .work { display: block; height: auto; min-height: 0; padding: 0; }
+  .stage { display: block; height: auto; min-height: 0; }
+
+  .canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 9in;
+    margin: 0 auto;
+    border: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .printTitle { display: block !important; }
+  .handle, .handleBend, .selRing, .marquee, .snapRing { display: none !important; }
+}
+
+/* Only ever seen on paper. */
+.printTitle {
+  display: none;
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .colorRow { margin-bottom: 8px; }
