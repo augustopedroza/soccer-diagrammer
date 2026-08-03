@@ -112,10 +112,16 @@ export function parse(text: string): ParseResult {
         dropped++;
         continue;
       }
+      // An unreadable colour falls back to the team kit rather than dropping the
+      // player: a bad swatch is not a reason to lose someone off the pitch.
+      const own = typeof sh.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(sh.color)
+        ? sh.color
+        : undefined;
       shapes.push({
         k: 'player', id, team: sh.team, number: n, x, y,
         rot: rot(sh.rot),
         scale: num(sh.scale, MIN_SCALE, MAX_SCALE) ?? 1,
+        ...(own ? { color: own } : {}),
       });
       seen.add(id);
     } else if (sh.k === 'kit' && x !== null && y !== null) {

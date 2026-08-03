@@ -642,6 +642,53 @@ describe('blank shirt numbers', () => {
   });
 });
 
+describe('a player in its own colour', () => {
+  const neutral = (color?: string) => {
+    const d = emptyDiagram();
+    d.shapes = [
+      { k: 'player', id: 'n1', team: 'own', number: null, x: 100, y: 100, rot: 0, scale: 1, ...(color ? { color } : {}) },
+    ];
+    return d;
+  };
+
+  it('round-trips the colour', () => {
+    const r = parse(serialize(neutral('#e8b21f')));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((r.diagram.shapes[0] as { color?: string }).color).toBe('#e8b21f');
+  });
+
+  it('leaves a player with no colour of its own alone', () => {
+    const r = parse(serialize(neutral()));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect('color' in r.diagram.shapes[0]).toBe(false);
+  });
+
+  for (const bad of ['red', '#ffff', 'url(#x)', '<script>', 12, null]) {
+    it(`refuses ${JSON.stringify(bad)} without dropping the player`, () => {
+      const raw = {
+        kind: FILE_KIND,
+        version: FILE_VERSION,
+        diagram: {
+          ...emptyDiagram(),
+          shapes: [
+            { k: 'player', id: 'n1', team: 'own', number: 9, x: 10, y: 10, rot: 0, scale: 1, color: bad },
+          ],
+        },
+      };
+      const r = parse(JSON.stringify(raw));
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      // The player survives in the team kit — a bad swatch is not a reason to
+      // lose someone off the pitch — and nothing but literal hex gets through,
+      // because the value goes straight into an SVG fill.
+      expect(r.diagram.shapes).toHaveLength(1);
+      expect((r.diagram.shapes[0] as { color?: string }).color).toBeUndefined();
+    });
+  }
+});
+
 describe('palettes', () => {
   it('offers 1-11 exactly once', () => {
     expect([...ALL_NUMBERS].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);

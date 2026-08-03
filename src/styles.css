@@ -200,6 +200,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .swatch.on { border-color: var(--accent); }
 .swatchCustom { background: linear-gradient(135deg,#f66,#6cf,#6f9); cursor: pointer; }
+/* "Back to the team kit" — a swatch with no colour of its own, so it cannot be
+   mistaken for one more colour to choose from. */
+.swatchKit {
+  background: repeating-linear-gradient(45deg, #fff, #fff 3px, var(--line) 3px, var(--line) 6px);
+}
 
 .marquee { fill: rgba(47,128,237,.12); stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
 

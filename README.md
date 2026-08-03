@@ -26,6 +26,9 @@ set.
 Players can carry a positional number or none at all. A small-sided game is four
 attackers, not the 2, 6, 8 and 10, so those go down blank.
 
+Any player can also be given its own colour, leaving the kit alone — that is how
+a neutral gets its bib. It keeps the shape of the side it is playing for.
+
 ## Drawing
 
 - **Place** a player or a piece of equipment: pick it, then click the surface.

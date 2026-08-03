@@ -28,6 +28,7 @@ export function PlayerToken({
   rot = 0,
   scale = 1,
   colors = DEFAULT_COLORS,
+  color,
 }: {
   team: Team;
   number: number | null;
@@ -36,9 +37,11 @@ export function PlayerToken({
   rot?: number;
   scale?: number;
   colors?: { own: string; opp: string };
+  /** This player's own colour, if it has one. Overrides the team kit. */
+  color?: string;
 }) {
   const r = 24;
-  const fill = team === 'own' ? colors.own : colors.opp;
+  const fill = color ?? (team === 'own' ? colors.own : colors.opp);
 
   // An equilateral triangle about the token centre, corners softened so it does
   // not read as a hazard sign next to the opposition disc.
@@ -568,6 +571,7 @@ export function PlayerMark({
       rot={shape.rot}
       scale={shape.scale}
       colors={colors}
+      color={shape.color}
     />
   );
 }

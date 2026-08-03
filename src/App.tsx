@@ -570,6 +570,25 @@ export default function App() {
     });
   }
 
+  /**
+   * Recolours every player in the selection, or puts them back in the team kit.
+   *
+   * Per player rather than per team, because the reason for wanting it is
+   * neutrals: the bibs who play for whichever side has the ball. They are still
+   * one side's shape while they are playing, so this changes the colour and
+   * leaves the shape — and the team — alone.
+   */
+  function colorSelected(hex: string | null) {
+    commitNow({
+      ...diagram,
+      shapes: diagram.shapes.map((sh) => {
+        if (sh.k !== 'player' || !selected.has(sh.id)) return sh;
+        const { color: _drop, ...rest } = sh;
+        return hex === null ? rest : { ...rest, color: hex };
+      }),
+    });
+  }
+
   /** Numbers, or clears, every player in the selection. */
   function numberSelected(value: number | null) {
     commitNow({
@@ -819,6 +838,37 @@ export default function App() {
                   Or double-click a player and press Enter. Typing a number works
                   too — press 1 then 0 for the 10, 1 then 1 for the 11.
                 </p>
+
+                {/* Just these players, not the kit. This is how a neutral gets
+                    its bib without moving to the other team. */}
+                <div className="teamName">
+                  Colour <span>these players only</span>
+                </div>
+                <div className="swatches">
+                  <button
+                    className={`swatch swatchKit${selectedPlayers.every((p) => !p.color) ? ' on' : ''}`}
+                    title="Back to the team kit"
+                    aria-label="Back to the team kit"
+                    onClick={() => colorSelected(null)}
+                  />
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c.hex}
+                      className={`swatch${selectedPlayers.every((p) => p.color === c.hex) ? ' on' : ''}`}
+                      style={{ background: c.hex }}
+                      title={c.name}
+                      aria-label={c.name}
+                      onClick={() => colorSelected(c.hex)}
+                    />
+                  ))}
+                  <input
+                    type="color"
+                    className="swatch swatchCustom"
+                    aria-label="Custom player colour"
+                    value={selectedPlayers[0]?.color ?? diagram.colors[selectedPlayers[0].team]}
+                    onChange={(e) => colorSelected(e.target.value)}
+                  />
+                </div>
               </div>
             )}
             <button onClick={() => setTool({ kind: 'select' })} aria-pressed={tool.kind === 'select'}>

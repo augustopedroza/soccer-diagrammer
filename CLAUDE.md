@@ -134,6 +134,13 @@ straight into an SVG attribute. Nothing is evaluated or rendered as markup.
 
 - `PlayerShape.number` is `number | null`. **Blank is a real state**, not a
   missing value: a 4v3 has four attackers, not the 2, 6, 8 and 10.
+- `PlayerShape.color` is optional and overrides the team kit. It exists for
+  neutrals, and it is per player rather than a third `Team` because a neutral is
+  still one side's shape while it is playing. Absent means the kit — so it is
+  omitted rather than written as the kit's own hex, or "back to the kit" would
+  stop tracking a later kit change. An unreadable colour on import falls back to
+  the kit and keeps the player; only literal hex is accepted, since the value
+  goes straight into an SVG fill.
 - Line ends are `{x, y}` or `{ref: playerId}`. An anchored end follows its
   player; a dangling ref degrades to `lastFrom`/`lastTo` rather than collapsing
   to the origin. Deleting a player *releases* its lines instead of deleting them.

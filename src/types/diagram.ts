@@ -47,6 +47,14 @@ export interface PlayerShape {
   rot: number;
   /** Multiplier on the token's size. */
   scale: number;
+  /**
+   * This player's own colour, overriding the team kit. Absent means the kit.
+   *
+   * Exists for neutrals — the bibs who play for whichever side has the ball, and
+   * who belong to neither kit. Stored per player rather than as a third team
+   * because a neutral is still one side's shape while it is playing.
+   */
+  color?: string;
 }
 
 export interface LineShape {
