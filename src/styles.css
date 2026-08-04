@@ -233,7 +233,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
     print-color-adjust: exact;
   }
 
-  .printTitle { display: block !important; }
+  .printOnly, .printHead, .printNotes { display: block !important; }
+
+  /* The head of the sheet: which activity, which session, and when. */
+  .printHead {
+    display: flex !important; align-items: baseline; justify-content: space-between;
+    gap: 16px; border-bottom: 1.5px solid #101317; padding-bottom: 6px; margin-bottom: 10px;
+  }
+  .printHead h2 { margin: 0; font-size: 15pt; font-weight: 650; }
+  .printHead p { margin: 2px 0 0; font-size: 9.5pt; color: #444; }
+  .printHead time { font-size: 10pt; font-weight: 600; white-space: nowrap; }
+
+  /* Somewhere to write. A sheet at the side of a pitch gets written on. */
+  .printNotes { margin-top: 12px; }
+  .printNotes h3 {
+    margin: 0 0 6px; font-size: 8.5pt; letter-spacing: .09em; text-transform: uppercase; color: #555;
+  }
+  .printNotes p { margin: 0; font-size: 10pt; line-height: 1.5; white-space: pre-wrap; }
+  .printRules span {
+    display: block; border-bottom: 1px solid #b9c0cb; height: 22px;
+  }
   /* One activity per sheet, in the session's order. */
   .printRest { display: block !important; }
   .printPage { display: block; break-before: page; page-break-before: always; }
@@ -278,12 +297,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* Only ever seen on paper. */
-.printTitle {
-  display: none;
-  margin: 0 0 8px;
-  font-size: 15px;
-  font-weight: 650;
+.printOnly, .printHead, .printNotes { display: none; }
+
+.notesInput {
+  width: 100%; font: inherit; font-size: 12.5px; line-height: 1.45;
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px;
+  background: #fff; resize: vertical; min-height: 68px;
 }
+.notesInput:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dateInput { min-width: 0; width: 150px; }
+.dateInput::-webkit-calendar-picker-indicator { filter: invert(1); opacity: .7; }
 
 .colorRow { margin-bottom: 8px; }
 .colorLabel { font-size: 11.5px; font-weight: 650; display: block; margin-bottom: 4px; }

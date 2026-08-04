@@ -1,6 +1,6 @@
 import { EQUIPMENT_IDS } from '../data/equipment';
 import { ALL_NUMBERS, DEFAULT_COLORS } from '../data/notation';
-import { MAX_BENDS, MAX_COORD, MAX_DIAGRAMS, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Session, type Shape } from '../types/diagram';
+import { MAX_BENDS, MAX_COORD, MAX_DIAGRAMS, MAX_LABEL, MAX_NOTES, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Session, type Shape } from '../types/diagram';
 
 export const FILE_KIND = 'soccer-session-diagram';
 
@@ -36,11 +36,21 @@ export function emptySession(): Session {
 
 export function serialize(session: Session): string {
   return JSON.stringify(
-    { kind: FILE_KIND, version: FILE_VERSION, title: session.title, diagrams: session.diagrams },
+    {
+      kind: FILE_KIND,
+      version: FILE_VERSION,
+      title: session.title,
+      ...(session.date ? { date: session.date } : {}),
+      diagrams: session.diagrams,
+    },
     null,
     2,
   );
 }
+
+/** A day, as yyyy-mm-dd. Anything else is not a date this app wrote. */
+export const isDate = (v: unknown): v is string =>
+  typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export type ParseResult =
   | { ok: true; session: Session; dropped: number }
@@ -101,13 +111,20 @@ export function parse(text: string): ParseResult {
         // thing to what the coach called it.
         diagrams[0].title;
 
-  return { ok: true, session: { title, diagrams }, dropped };
+  return {
+    ok: true,
+    session: { title, ...(isDate(obj.date) ? { date: obj.date } : {}), diagrams },
+    dropped,
+  };
 }
 
 /** One diagram out of the file, with everything unreadable dropped and counted. */
 function parseDiagram(src: Record<string, unknown>): { diagram: Diagram; dropped: number } {
   const out = emptyDiagram();
   out.title = typeof src.title === 'string' ? src.title.slice(0, 200) : '';
+  if (typeof src.notes === 'string' && src.notes.trim() !== '') {
+    out.notes = src.notes.slice(0, MAX_NOTES);
+  }
 
   const s = (src.surface ?? {}) as Record<string, unknown>;
   out.surface = {

@@ -26,7 +26,7 @@ import {
   replaceDiagram,
 } from './lib/session';
 import { CROP_FRACTION, surfaceBox } from './lib/surfaceBox';
-import { DEFAULT_SCALE, MAX_DIAGRAMS, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
+import { DEFAULT_SCALE, MAX_DIAGRAMS, MAX_NOTES, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Session, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
@@ -89,6 +89,59 @@ function CropIcon({ crop }: { crop: Crop }) {
       <rect x={0} y={0} width={w} height={kept} rx={2} className="cropKept" />
       <line x1={0} y1={h / 2} x2={w} y2={h / 2} className="cropWhole" />
     </svg>
+  );
+}
+
+/**
+ * The head of a printed sheet, and the notes under it.
+ *
+ * Two pieces rather than a wrapper, because the diagram goes BETWEEN them and
+ * the active page renders its canvas separately from the rest of the session.
+ * Wrapped, the notes came out above the pitch.
+ *
+ * Only ever on paper. A plan is read at the side of a pitch, where what is
+ * missing from a bare diagram is which session it belongs to, when it is for,
+ * and somewhere to write.
+ */
+function PrintHead({
+  session,
+  diagram,
+  index,
+}: {
+  session: Session;
+  diagram: Diagram;
+  index: number;
+}) {
+  return (
+    <header className="printHead">
+      <div>
+        <h2>{diagramLabel(diagram, index)}</h2>
+        <p>
+          {session.title || 'Untitled session'}
+          {' · '}
+          {index + 1} of {session.diagrams.length}
+        </p>
+      </div>
+      {session.date && <time dateTime={session.date}>{longDate(session.date)}</time>}
+    </header>
+  );
+}
+
+/** Ruled lines when nothing was typed: a sheet at a pitch gets written on. */
+function PrintNotes({ diagram }: { diagram: Diagram }) {
+  return (
+    <section className="printNotes">
+      <h3>Notes</h3>
+      {diagram.notes ? (
+        <p>{diagram.notes}</p>
+      ) : (
+        <div className="printRules">
+          {Array.from({ length: 5 }, (_, i) => (
+            <span key={i} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -161,6 +214,24 @@ function KitIcon({ item }: { item: string }) {
       <KitMark item={item} x={0} y={0} />
     </svg>
   );
+}
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/**
+ * yyyy-mm-dd as words.
+ *
+ * Split by hand rather than through `new Date(iso)`, which reads a bare date as
+ * UTC midnight and prints the day before anywhere west of Greenwich — a session
+ * plan dated a day early is worse than one with no date at all.
+ */
+function longDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const month = MONTHS[m - 1];
+  return month ? `${d} ${month} ${y}` : iso;
 }
 
 /** Arrow keys, as a delta in surface units before the Shift multiplier. */
@@ -848,6 +919,14 @@ export default function App() {
           onChange={(e) => setSession({ ...session, title: e.target.value })}
           aria-label="Session name"
         />
+        <input
+          className="titleInput dateInput"
+          type="date"
+          value={session.date ?? ''}
+          onChange={(e) => setSession({ ...session, date: e.target.value || undefined })}
+          aria-label="Session date"
+          title="The day this session is for"
+        />
         <div className="spacer" />
         <button onClick={undo} title={`Undo (${MOD}Z)`}>Undo</button>
         <button onClick={redo} title={`Redo (⇧${MOD}Z)`}>Redo</button>
@@ -981,6 +1060,23 @@ export default function App() {
               </button>
             ))}
           </section>
+
+          <Panel title="Notes">
+            <p className="hint">
+              Coaching points, conditions, how long it runs. Printed under this
+              diagram; left blank, the sheet gets ruled lines to write on.
+            </p>
+            <textarea
+              className="notesInput"
+              value={diagram.notes ?? ''}
+              placeholder="What this activity is for…"
+              maxLength={MAX_NOTES}
+              rows={4}
+              onChange={(e) =>
+                commitNow({ ...diagram, notes: e.target.value || undefined })
+              }
+            />
+          </Panel>
 
           <Panel title="Kit colours">
             {TEAM_SPECS.map((t) => (
@@ -1218,12 +1314,11 @@ export default function App() {
               Delete
             </button>
           </div>
-          {/* Titles the printed sheet; hidden on screen, where the field at the
-              top of the window already carries it. */}
-          <h2 className="printTitle">
-            {session.title ? `${session.title} — ` : ''}
-            {diagramLabel(diagram, active)}
-          </h2>
+          {/* The printed sheet's head and its notes; hidden on screen, where
+              the strip and the palettes already say all of this. */}
+          <div className="printOnly">
+            <PrintHead session={session} diagram={diagram} index={active} />
+          </div>
           <Canvas
             diagram={diagram}
             tool={tool}
@@ -1285,6 +1380,9 @@ export default function App() {
               />
             </div>
           )}
+          <div className="printOnly">
+            <PrintNotes diagram={diagram} />
+          </div>
           {/* The rest of the session, for paper only. A plan is handed over
               whole; printing whichever activity happened to be on screen would
               make the coach print four times and collate. */}
@@ -1293,10 +1391,7 @@ export default function App() {
               {session.diagrams.map((d, i) =>
                 i === active ? null : (
                   <section key={i} className="printPage">
-                    <h2 className="printTitle">
-                      {session.title ? `${session.title} — ` : ''}
-                      {diagramLabel(d, i)}
-                    </h2>
+                    <PrintHead session={session} diagram={d} index={i} />
                     <Canvas
                       diagram={d}
                       tool={{ kind: 'select' }}
@@ -1304,6 +1399,7 @@ export default function App() {
                       onSelect={() => {}}
                       onChange={() => {}}
                     />
+                    <PrintNotes diagram={d} />
                   </section>
                 ),
               )}

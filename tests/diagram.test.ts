@@ -4,6 +4,7 @@ import {
   FILE_VERSION,
   MAX_BYTES,
   emptyDiagram,
+  isDate,
   parse,
   serialize,
 } from '../src/lib/file';
@@ -38,7 +39,7 @@ import { ALL_NUMBERS, LINE_SPECS, bibRing } from '../src/data/notation';
 import { SHORTCUT_GROUPS } from '../src/data/shortcuts';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
-import { MAX_BENDS, MAX_DIAGRAMS, type Diagram, type Session } from '../src/types/diagram';
+import { MAX_BENDS, MAX_DIAGRAMS, MAX_NOTES, type Diagram, type Session } from '../src/types/diagram';
 
 /** A file holding one diagram, which is what most of these cases are about. */
 const asSession = (d: Diagram): Session => ({ title: 'Tuesday', diagrams: [d] });
@@ -996,6 +997,58 @@ describe('a bib that survives grey print', () => {
 
   it('leaves the team kit unringed, because the ring is what says "not one of these"', () => {
     expect(bibRing(undefined, '#1c6bba')).toBeUndefined();
+  });
+});
+
+describe('the printed sheet', () => {
+  it('round-trips a session date and a diagram\'s notes', () => {
+    const s: Session = {
+      title: 'Tuesday',
+      date: '2026-08-11',
+      diagrams: [{ ...emptyDiagram(), title: 'Rondo', notes: 'Two touch.\nSwitch after 90s.' }],
+    };
+    const r = parse(serialize(s));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.date).toBe('2026-08-11');
+    expect(r.session.diagrams[0].notes).toBe('Two touch.\nSwitch after 90s.');
+  });
+
+  it('refuses anything that is not a plain yyyy-mm-dd', () => {
+    for (const bad of ['11/08/2026', 'tomorrow', '2026-8-1', 42, null, {}]) {
+      expect(isDate(bad)).toBe(false);
+    }
+    expect(isDate('2026-08-11')).toBe(true);
+  });
+
+  it('drops a date it cannot read rather than the session with it', () => {
+    const raw = {
+      kind: FILE_KIND,
+      version: FILE_VERSION,
+      title: 'x',
+      date: 'next Tuesday',
+      diagrams: [emptyDiagram()],
+    };
+    const r = parse(JSON.stringify(raw));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.date).toBeUndefined();
+    expect(r.session.diagrams).toHaveLength(1);
+  });
+
+  it('treats notes of nothing but space as no notes', () => {
+    const r = parse(serialize({ title: 'x', diagrams: [{ ...emptyDiagram(), notes: '   ' }] }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.diagrams[0].notes).toBeUndefined();
+  });
+
+  it('caps notes rather than refusing them', () => {
+    const long = 'x'.repeat(MAX_NOTES + 500);
+    const r = parse(serialize({ title: 'x', diagrams: [{ ...emptyDiagram(), notes: long }] }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.diagrams[0].notes).toHaveLength(MAX_NOTES);
   });
 });
 

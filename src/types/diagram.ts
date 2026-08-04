@@ -128,6 +128,11 @@ export interface TeamColors {
 export interface Diagram {
   /** This diagram's own name — an activity within the session. */
   title: string;
+  /**
+   * What the coach wants said about this activity — the coaching points, the
+   * conditions, how long it runs. Printed under the diagram.
+   */
+  notes?: string;
   surface: Surface;
   colors: TeamColors;
   shapes: Shape[];
@@ -142,8 +147,19 @@ export interface Diagram {
  */
 export interface Session {
   title: string;
+  /**
+   * The day the session is FOR, as yyyy-mm-dd, not the day it was printed.
+   *
+   * Printing today's date on a plan written for next Tuesday would be a
+   * confident lie, so this is set by the coach and left off the sheet when they
+   * have not set one.
+   */
+  date?: string;
   diagrams: Diagram[];
 }
+
+/** How much a coach can write about one activity. */
+export const MAX_NOTES = 2000;
 
 /** More than a session's worth; past this it is a folder, not a plan. */
 export const MAX_DIAGRAMS = 12;

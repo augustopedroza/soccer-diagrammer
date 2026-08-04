@@ -38,6 +38,11 @@ its activities — a warm-up, a practice or two, a game — and you can add,
 duplicate, rename by double-clicking, reorder and delete them. Save writes the
 lot under the session's name, and Print puts one activity on each sheet.
 
+Give the session a date and each activity its notes — coaching points,
+conditions, how long it runs — and they go on the printed sheet: the activity's
+name and where it sits in the session at the top, the diagram, then the notes.
+Leave the notes empty and the sheet gets ruled lines to write on instead.
+
 Files saved by the earlier single-diagram version still open; they become a
 session of one.
 
