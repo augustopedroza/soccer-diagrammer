@@ -128,8 +128,42 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .kitBtn.on { color: var(--ink); }
 .kitBtn.on { border-color: var(--accent); background: #eaf0f6; font-weight: 600; }
 
-.stage { flex: 1; display: flex; justify-content: center; align-items: stretch; min-width: 0; min-height: 0; }
+.stage {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0; min-height: 0; gap: 8px;
+}
+
+/* The session's activities. */
+.strip { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex: none; }
+.stripTab {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+  padding: 5px 10px; font-size: 12.5px; color: var(--muted); max-width: 220px;
+}
+.stripTab > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stripTab.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.stripNo {
+  font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  opacity: .6; flex: none;
+}
+.stripName {
+  font: inherit; font-size: 12.5px; width: 130px; padding: 1px 4px;
+  border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink);
+}
+.stripAdd {
+  background: var(--paper); border: 1px dashed var(--line); border-radius: 6px;
+  padding: 4px 11px; font-size: 15px; line-height: 1; color: var(--muted);
+}
+.stripAdd:hover { border-color: var(--accent); color: var(--accent); }
+.stripSpacer { flex: 1; min-width: 8px; }
+.stripAct {
+  background: none; border: 1px solid transparent; border-radius: 6px;
+  padding: 4px 8px; font-size: 11.5px; color: var(--muted);
+}
+.stripAct:hover:not(:disabled) { border-color: var(--line); background: var(--paper); color: var(--ink); }
+.stripAct:disabled { opacity: .35; cursor: not-allowed; }
 .canvas {
+  flex: 1;
   /* The element simply fills its column; the drawing is centred and scaled
      inside it by preserveAspectRatio. Letting CSS aspect-ratio size the element
      meant a tall full pitch overflowed the shell and was clipped. */
@@ -184,7 +218,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
   html, body, #root { height: auto; }
   .app { display: block; height: auto; overflow: visible; }
-  .bar, .palette, .kitRail, .foot, .notice { display: none !important; }
+  .bar, .palette, .kitRail, .foot, .notice, .strip { display: none !important; }
   .work { display: block; height: auto; min-height: 0; padding: 0; }
   .stage { display: block; height: auto; min-height: 0; }
 
@@ -200,6 +234,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
 
   .printTitle { display: block !important; }
+  /* One activity per sheet, in the session's order. */
+  .printRest { display: block !important; }
+  .printPage { display: block; break-before: page; page-break-before: always; }
   .handle, .handleBend, .selRing, .marquee, .snapRing, .chrome, .guide { display: none !important; }
 }
 
@@ -227,6 +264,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .marquee { fill: rgba(47,128,237,.12); stroke: #2f80ed; stroke-width: 2; stroke-dasharray: 6 4; }
+
+/* Only ever on paper: the session's other activities. */
+.printRest { display: none; }
 
 /* Foldable palette sections. The heading is the control, so there is no extra
    affordance to find and nothing moves when it is used. */

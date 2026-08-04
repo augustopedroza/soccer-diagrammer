@@ -126,11 +126,27 @@ export interface TeamColors {
 }
 
 export interface Diagram {
+  /** This diagram's own name — an activity within the session. */
   title: string;
   surface: Surface;
   colors: TeamColors;
   shapes: Shape[];
 }
+
+/**
+ * A session: several diagrams under one name.
+ *
+ * A session is three or four activities — a warm-up, a practice or two, a
+ * game — and they belong together. Keeping each in its own file made the coach
+ * the filing system.
+ */
+export interface Session {
+  title: string;
+  diagrams: Diagram[];
+}
+
+/** More than a session's worth; past this it is a folder, not a plan. */
+export const MAX_DIAGRAMS = 12;
 
 /**
  * Shapes are stored in the surface's own box, whose size comes from

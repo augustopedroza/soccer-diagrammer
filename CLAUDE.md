@@ -157,6 +157,18 @@ changed shape or file size.
 zigzag. `wavyPath` and `smoothThrough` both size their sampling so a wave gets
 ~20.
 
+**History holds sessions, not diagrams.** Undo has to bring back a deleted
+activity, and a per-diagram stack cannot: the diagram it belonged to is already
+gone. `App` keeps `session` + `active`, derives `diagram` from them, and every
+edit funnels through `replaceDiagram(session, active, next)`. State updaters read
+`activeAt.current` rather than `active`, since a queued updater cannot see the
+render's value.
+
+**The file format is versioned, and version 1 still opens.** v2 holds
+`diagrams: []` and a session `title`; v1 held one `diagram`, and parses into a
+session of one that takes its name from the diagram. Refusing v1 by version
+number would be refusing files the coach already has.
+
 ## Data model notes
 
 - `PlayerShape.number` is `number | null`. **Blank is a real state**, not a

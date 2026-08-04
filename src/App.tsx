@@ -13,13 +13,25 @@ import {
   type SmallSided,
 } from './data/formations';
 import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
-import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
+import { download, emptyDiagram, emptySession, filename, parse, serialize } from './lib/file';
 import { confineToBox, translated, wavyPath } from './lib/geometry';
+import {
+  addDiagram,
+  clampIndex,
+  diagramLabel,
+  duplicateDiagram,
+  moveDiagram,
+  removeDiagram,
+  replaceDiagram,
+} from './lib/session';
 import { CROP_FRACTION, surfaceBox } from './lib/surfaceBox';
-import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
-import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
+import { DEFAULT_SCALE, MAX_DIAGRAMS, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
+import type { Crop, Diagram, Facing, LineType, Session, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
 const HISTORY_LIMIT = 60;
+
+/** A selection that is always empty, for the print-only canvases. */
+const EMPTY: ReadonlySet<string> = new Set();
 
 /**
  * The dribble icon, ending flat on the arrow head's base at x=48 — the taper in
@@ -133,14 +145,38 @@ const sideCount = (raw: string, was: number): number => {
 };
 
 export default function App() {
-  const [diagram, setDiagram] = useState<Diagram>(emptyDiagram);
+  const [session, setSession] = useState<Session>(emptySession);
+  const [active, setActive] = useState(0);
   const [tool, setTool] = useState<Tool>({ kind: 'select' });
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const past = useRef<Diagram[]>([]);
-  const future = useRef<Diagram[]>([]);
+  /** The diagram on screen. Everything below edits this one. */
+  const diagram = session.diagrams[active] ?? session.diagrams[0];
+
+  /**
+   * History holds whole sessions, not diagrams.
+   *
+   * Undo has to be able to bring back a deleted activity, and a per-diagram
+   * stack could not: the diagram it belonged to would already be gone.
+   */
+  const past = useRef<Session[]>([]);
+  const future = useRef<Session[]>([]);
+  /** Read inside state updaters, which cannot see the render's `active`. */
+  const activeAt = useRef(0);
+  activeAt.current = active;
+
+  const commitSession = useCallback((next: Session, commit: boolean) => {
+    setSession((prev) => {
+      if (commit) {
+        past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+        future.current = [];
+      }
+      return next;
+    });
+    setNotice(null);
+  }, []);
 
   /**
    * `commit` separates a finished action from the frames of a drag. Without it
@@ -148,12 +184,12 @@ export default function App() {
    */
   const change = useCallback(
     (next: Diagram, commit: boolean) => {
-      setDiagram((prev) => {
+      setSession((prev) => {
         if (commit) {
           past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
           future.current = [];
         }
-        return next;
+        return replaceDiagram(prev, activeAt.current, next);
       });
       setNotice(null);
     },
@@ -162,23 +198,30 @@ export default function App() {
 
   const commitNow = useCallback((next: Diagram) => change(next, true), [change]);
 
-  const undo = useCallback(() => {
-    setDiagram((prev) => {
-      const last = past.current.pop();
-      if (!last) return prev;
-      future.current = [...future.current, prev];
-      return last;
+  /** Edits the current diagram from its latest value, as one undo step. */
+  const editShapes = useCallback((edit: (d: Diagram) => Diagram) => {
+    setSession((prev) => {
+      past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+      future.current = [];
+      const at = activeAt.current;
+      return replaceDiagram(prev, at, edit(prev.diagrams[at]));
     });
   }, []);
 
-  const redo = useCallback(() => {
-    setDiagram((prev) => {
-      const next = future.current.pop();
+  /** Undo can change how many diagrams there are, so the view has to follow. */
+  const step = useCallback((from: typeof past, to: typeof future) => {
+    setSession((prev) => {
+      const next = from.current.pop();
       if (!next) return prev;
-      past.current = [...past.current, prev];
+      to.current = [...to.current, prev];
+      setActive((i) => clampIndex(i, next.diagrams.length));
+      setSelected(new Set());
       return next;
     });
   }, []);
+
+  const undo = useCallback(() => step(past, future), [step]);
+  const redo = useCallback(() => step(future, past), [step]);
 
   // Lines in the current selection, so their type can be changed after drawing.
   const selectedLines = diagram.shapes.filter(
@@ -247,10 +290,12 @@ export default function App() {
         return { ...sh, id, x: sh.x + offset, y: sh.y + offset };
       });
 
-      setDiagram((prev) => {
+      setSession((prev) => {
         past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
         future.current = [];
-        return { ...prev, shapes: [...prev.shapes, ...copies] };
+        const at = activeAt.current;
+        const d = prev.diagrams[at];
+        return replaceDiagram(prev, at, { ...d, shapes: [...d.shapes, ...copies] });
       });
       setSelected(new Set(copies.map((c) => c.id)));
     },
@@ -260,10 +305,14 @@ export default function App() {
   /** Turns everything selected that has a facing. Labels and lines have none. */
   const rotateSelected = useCallback(
     (deltaOrAbsolute: number, absolute = false) => {
-      setDiagram((prev) => {
-        const next = {
-          ...prev,
-          shapes: prev.shapes.map((sh) =>
+      setSession((prev) => {
+        past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
+        future.current = [];
+        const at = activeAt.current;
+        const d = prev.diagrams[at];
+        return replaceDiagram(prev, at, {
+          ...d,
+          shapes: d.shapes.map((sh) =>
             selected.has(sh.id) && sh.k !== 'line'
               ? {
                   ...sh,
@@ -273,10 +322,7 @@ export default function App() {
                 }
               : sh,
           ),
-        };
-        past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
-        future.current = [];
-        return next;
+        });
       });
     },
     [selected],
@@ -300,10 +346,12 @@ export default function App() {
   const openDialog = useCallback(() => fileInput.current?.click(), []);
 
   const saveFile = useCallback(() => {
-    const name = filename(diagram, 'json');
-    download(name, serialize(diagram), 'application/json');
+    // The whole session, under the session's name: the activities were planned
+    // together and are no use to anyone as five files called "untitled".
+    const name = filename(session, 'json');
+    download(name, serialize(session), 'application/json');
     setNotice(`Saved ${name}`);
-  }, [diagram]);
+  }, [session]);
 
   const printSheet = useCallback(() => window.print(), []);
 
@@ -488,12 +536,69 @@ export default function App() {
       setNotice(res.reason);
       return;
     }
-    past.current = [...past.current, diagram];
+    past.current = [...past.current, session];
     future.current = [];
-    setDiagram(res.diagram);
+    setSession(res.session);
+    setActive(0);
     setSelected(new Set());
-    setNotice(res.dropped > 0 ? `Opened. ${res.dropped} unreadable shape(s) were ignored.` : 'Opened.');
+    const many = res.session.diagrams.length > 1 ? ` ${res.session.diagrams.length} diagrams.` : '';
+    setNotice(
+      res.dropped > 0
+        ? `Opened.${many} ${res.dropped} unreadable item(s) were ignored.`
+        : `Opened.${many}`,
+    );
   }
+
+  /**
+   * The activities in the session, as one strip above the pitch.
+   *
+   * Each verb reports through commitSession, so adding, copying and deleting an
+   * activity are all undoable — deleting one is the most destructive thing in
+   * the app and the one most worth being able to take back.
+   */
+  function pickDiagram(i: number) {
+    setActive(clampIndex(i, session.diagrams.length));
+    setSelected(new Set());
+  }
+
+  function newDiagram() {
+    const made = addDiagram(session, active, emptyDiagram());
+    if (made.session === session) {
+      setNotice(`A session holds up to ${MAX_DIAGRAMS} diagrams.`);
+      return;
+    }
+    commitSession(made.session, true);
+    setActive(made.active);
+    setSelected(new Set());
+  }
+
+  function copyDiagram() {
+    const made = duplicateDiagram(session, active);
+    if (made.session === session) {
+      setNotice(`A session holds up to ${MAX_DIAGRAMS} diagrams.`);
+      return;
+    }
+    commitSession(made.session, true);
+    setActive(made.active);
+    setSelected(new Set());
+  }
+
+  function dropDiagram(i: number) {
+    const left = removeDiagram(session, i, emptyDiagram);
+    commitSession(left.session, true);
+    setActive(left.active);
+    setSelected(new Set());
+  }
+
+  function shiftDiagram(by: number) {
+    const moved = moveDiagram(session, active, active + by);
+    if (moved.session === session) return;
+    commitSession(moved.session, true);
+    setActive(moved.active);
+  }
+
+  /** Which tab is being renamed, if any. */
+  const [renaming, setRenaming] = useState<number | null>(null);
 
   const [templateTeam, setTemplateTeam] = useState<Team>('own');
   const [customSided, setCustomSided] = useState<SmallSided>({ own: 4, opp: 3 });
@@ -624,31 +729,23 @@ export default function App() {
       if (open.kind === 'text') {
         // Any wording is valid, including none: an empty label is still there
         // and still selectable, exactly as it is from the rail's field.
-        setDiagram((prev) => {
-          past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
-          future.current = [];
-          return {
-            ...prev,
-            shapes: prev.shapes.map((sh) =>
-              sh.k === 'text' && sh.id === open.id ? { ...sh, text: open.value.slice(0, MAX_LABEL) } : sh,
-            ),
-          };
-        });
+        editShapes((d) => ({
+          ...d,
+          shapes: d.shapes.map((sh) =>
+            sh.k === 'text' && sh.id === open.id ? { ...sh, text: open.value.slice(0, MAX_LABEL) } : sh,
+          ),
+        }));
         return null;
       }
 
       const n = raw === '' ? null : Number(raw);
       if (n === null || ALL_NUMBERS.includes(n)) {
-        setDiagram((prev) => {
-          past.current = [...past.current.slice(-HISTORY_LIMIT), prev];
-          future.current = [];
-          return {
-            ...prev,
-            shapes: prev.shapes.map((sh) =>
-              sh.k === 'player' && sh.id === open.id ? { ...sh, number: n } : sh,
-            ),
-          };
-        });
+        editShapes((d) => ({
+          ...d,
+          shapes: d.shapes.map((sh) =>
+            sh.k === 'player' && sh.id === open.id ? { ...sh, number: n } : sh,
+          ),
+        }));
       } else {
         setNotice(`${raw} is not a shirt number — 1 to 11, or empty for none.`);
       }
@@ -698,10 +795,10 @@ export default function App() {
         <h1>Session Diagrammer</h1>
         <input
           className="titleInput"
-          value={diagram.title}
+          value={session.title}
           placeholder="Untitled session"
-          onChange={(e) => setDiagram({ ...diagram, title: e.target.value })}
-          aria-label="Diagram title"
+          onChange={(e) => setSession({ ...session, title: e.target.value })}
+          aria-label="Session name"
         />
         <div className="spacer" />
         <button onClick={undo} title={`Undo (${MOD}Z)`}>Undo</button>
@@ -1001,9 +1098,79 @@ export default function App() {
         </aside>
 
         <main className="stage">
+          {/* The session's activities. Above the pitch because it is the frame
+              around everything below it: which activity you are drawing. */}
+          <div className="strip">
+            {session.diagrams.map((d, i) => (
+              <button
+                key={i}
+                className={`stripTab${i === active ? ' on' : ''}`}
+                aria-pressed={i === active}
+                onClick={() => pickDiagram(i)}
+                onDoubleClick={() => setRenaming(i)}
+                title={`${diagramLabel(d, i)} — double-click to rename`}
+              >
+                <span className="stripNo">{i + 1}</span>
+                {renaming === i ? (
+                  <input
+                    autoFocus
+                    className="stripName"
+                    value={d.title}
+                    placeholder={`Diagram ${i + 1}`}
+                    maxLength={60}
+                    onChange={(e) => commitNow({ ...d, title: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === 'Escape') setRenaming(null);
+                    }}
+                    onBlur={() => setRenaming(null)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span>{diagramLabel(d, i)}</span>
+                )}
+              </button>
+            ))}
+            <button className="stripAdd" onClick={newDiagram} title="Add a diagram">
+              +
+            </button>
+            <div className="stripSpacer" />
+            <button
+              className="stripAct"
+              onClick={copyDiagram}
+              title="Duplicate this diagram — usually the next phase of the same practice"
+            >
+              Duplicate
+            </button>
+            <button
+              className="stripAct"
+              onClick={() => shiftDiagram(-1)}
+              disabled={active === 0}
+              title="Move earlier in the session"
+            >
+              ←
+            </button>
+            <button
+              className="stripAct"
+              onClick={() => shiftDiagram(1)}
+              disabled={active === session.diagrams.length - 1}
+              title="Move later in the session"
+            >
+              →
+            </button>
+            <button
+              className="stripAct"
+              onClick={() => dropDiagram(active)}
+              title="Delete this diagram"
+            >
+              Delete
+            </button>
+          </div>
           {/* Titles the printed sheet; hidden on screen, where the field at the
               top of the window already carries it. */}
-          <h2 className="printTitle">{diagram.title || 'Session diagram'}</h2>
+          <h2 className="printTitle">
+            {session.title ? `${session.title} — ` : ''}
+            {diagramLabel(diagram, active)}
+          </h2>
           <Canvas
             diagram={diagram}
             tool={tool}
@@ -1063,6 +1230,30 @@ export default function App() {
                 }}
                 onBlur={commitEdit}
               />
+            </div>
+          )}
+          {/* The rest of the session, for paper only. A plan is handed over
+              whole; printing whichever activity happened to be on screen would
+              make the coach print four times and collate. */}
+          {session.diagrams.length > 1 && (
+            <div className="printRest">
+              {session.diagrams.map((d, i) =>
+                i === active ? null : (
+                  <section key={i} className="printPage">
+                    <h2 className="printTitle">
+                      {session.title ? `${session.title} — ` : ''}
+                      {diagramLabel(d, i)}
+                    </h2>
+                    <Canvas
+                      diagram={d}
+                      tool={{ kind: 'select' }}
+                      selected={EMPTY}
+                      onSelect={() => {}}
+                      onChange={() => {}}
+                    />
+                  </section>
+                ),
+              )}
             </div>
           )}
         </main>

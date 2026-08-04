@@ -27,10 +27,22 @@ import {
   transformed,
   translated,
 } from '../src/lib/geometry';
+import {
+  addDiagram,
+  diagramLabel,
+  duplicateDiagram,
+  moveDiagram,
+  removeDiagram,
+} from '../src/lib/session';
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
-import { MAX_BENDS, type Diagram } from '../src/types/diagram';
+import { MAX_BENDS, MAX_DIAGRAMS, type Diagram, type Session } from '../src/types/diagram';
+
+/** A file holding one diagram, which is what most of these cases are about. */
+const asSession = (d: Diagram): Session => ({ title: 'Tuesday', diagrams: [d] });
+/** The first diagram out of a parse result, once it is known to be ok. */
+const first = (r: { ok: true; session: Session }) => r.session.diagrams[0];
 
 function withPlayers(): Diagram {
   const d = emptyDiagram();
@@ -244,10 +256,10 @@ describe('freehand', () => {
       ...d,
       shapes: d.shapes.map((s) => (s.k === 'line' ? { ...s, bends: [{ t: 0.4, o: 55 }] } : s)),
     };
-    const round = parse(serialize(freehand));
+    const round = parse(serialize(asSession(freehand)));
     expect(round.ok).toBe(true);
     if (round.ok) {
-      const l = round.diagram.shapes.find((s) => s.k === 'line') as { bends?: unknown };
+      const l = first(round).shapes.find((s) => s.k === 'line') as { bends?: unknown };
       expect(l.bends).toEqual([{ t: 0.4, o: 55 }]);
     }
 
@@ -270,8 +282,8 @@ describe('freehand', () => {
     const hostile = parse(JSON.stringify(raw));
     expect(hostile.ok).toBe(true);
     if (!hostile.ok) return;
-    expect(hostile.diagram.shapes).toHaveLength(1);
-    expect((hostile.diagram.shapes[0] as { bends?: unknown }).bends).toBeUndefined();
+    expect(first(hostile).shapes).toHaveLength(1);
+    expect((first(hostile).shapes[0] as { bends?: unknown }).bends).toBeUndefined();
   });
 });
 
@@ -446,10 +458,10 @@ describe('curves', () => {
 describe('save and open', () => {
   it('round-trips a diagram exactly', () => {
     const d = withPlayers();
-    const r = parse(serialize(d));
+    const r = parse(serialize(asSession(d)));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram).toEqual(d);
+    expect(first(r)).toEqual(d);
     expect(r.dropped).toBe(0);
   });
 
@@ -493,8 +505,8 @@ describe('save and open', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // Unknown enums fall back rather than propagating.
-    expect(r.diagram.surface).toEqual({ sport: 'soccer', crop: 'full', facing: 'up', style: 'shaded' });
-    expect(r.diagram.shapes.map((s) => s.id)).toEqual(['ok']);
+    expect(first(r).surface).toEqual({ sport: 'soccer', crop: 'full', facing: 'up', style: 'shaded' });
+    expect(first(r).shapes.map((s) => s.id)).toEqual(['ok']);
     expect(r.dropped).toBe(5);
   });
 
@@ -521,7 +533,7 @@ describe('save and open', () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes[0]).toMatchObject({ from: { x: 100, y: 100 } });
+    expect(first(r).shapes[0]).toMatchObject({ from: { x: 100, y: 100 } });
   });
 
   it('rejects duplicate ids, which would break selection and anchoring', () => {
@@ -539,7 +551,7 @@ describe('save and open', () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes).toHaveLength(1);
+    expect(first(r).shapes).toHaveLength(1);
     expect(r.dropped).toBe(1);
   });
 });
@@ -548,10 +560,10 @@ describe('labels', () => {
   it('round-trips a label with its size', () => {
     const d = emptyDiagram();
     d.shapes = [{ k: 'text', id: 't1', x: 100, y: 200, text: 'Overload here', size: 32, rot: 30 }];
-    const r = parse(serialize(d));
+    const r = parse(serialize(asSession(d)));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes[0]).toEqual(d.shapes[0]);
+    expect(first(r).shapes[0]).toEqual(d.shapes[0]);
   });
 
   it('caps an absurdly long label rather than refusing the file', () => {
@@ -564,7 +576,7 @@ describe('labels', () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const t = r.diagram.shapes[0] as { text: string };
+    const t = first(r).shapes[0] as { text: string };
     expect(t.text.length).toBe(120);
   });
 
@@ -583,8 +595,8 @@ describe('labels', () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes).toHaveLength(1);
-    expect(r.diagram.shapes[0]).toMatchObject({ id: 'ok', size: 22 });
+    expect(first(r).shapes).toHaveLength(1);
+    expect(first(r).shapes[0]).toMatchObject({ id: 'ok', size: 22 });
     expect(r.dropped).toBe(1);
   });
 
@@ -603,7 +615,7 @@ describe('labels', () => {
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const [a, b] = r.diagram.shapes as { scale: number }[];
+    const [a, b] = first(r).shapes as { scale: number }[];
     expect(a.scale).toBe(1);
     expect(b.scale).toBe(1.5);
   });
@@ -760,10 +772,10 @@ describe('blank shirt numbers', () => {
   };
 
   it('round-trips a blank token', () => {
-    const r = parse(serialize(withBlank()));
+    const r = parse(serialize(asSession(withBlank())));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes).toEqual(withBlank().shapes);
+    expect(first(r).shapes).toEqual(withBlank().shapes);
     expect(r.dropped).toBe(0);
   });
 
@@ -780,7 +792,7 @@ describe('blank shirt numbers', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.dropped).toBe(0);
-    expect((r.diagram.shapes[0] as { number: number | null }).number).toBeNull();
+    expect((first(r).shapes[0] as { number: number | null }).number).toBeNull();
   });
 
   it('still drops a number that is not a shirt number', () => {
@@ -795,7 +807,7 @@ describe('blank shirt numbers', () => {
     const r = parse(JSON.stringify(raw));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.diagram.shapes).toHaveLength(0);
+    expect(first(r).shapes).toHaveLength(0);
     expect(r.dropped).toBe(1);
   });
 });
@@ -810,17 +822,17 @@ describe('a player in its own colour', () => {
   };
 
   it('round-trips the colour', () => {
-    const r = parse(serialize(neutral('#e8b21f')));
+    const r = parse(serialize(asSession(neutral('#e8b21f'))));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect((r.diagram.shapes[0] as { color?: string }).color).toBe('#e8b21f');
+    expect((first(r).shapes[0] as { color?: string }).color).toBe('#e8b21f');
   });
 
   it('leaves a player with no colour of its own alone', () => {
-    const r = parse(serialize(neutral()));
+    const r = parse(serialize(asSession(neutral())));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect('color' in r.diagram.shapes[0]).toBe(false);
+    expect('color' in first(r).shapes[0]).toBe(false);
   });
 
   for (const bad of ['red', '#ffff', 'url(#x)', '<script>', 12, null]) {
@@ -841,10 +853,137 @@ describe('a player in its own colour', () => {
       // The player survives in the team kit — a bad swatch is not a reason to
       // lose someone off the pitch — and nothing but literal hex gets through,
       // because the value goes straight into an SVG fill.
-      expect(r.diagram.shapes).toHaveLength(1);
-      expect((r.diagram.shapes[0] as { color?: string }).color).toBeUndefined();
+      expect(first(r).shapes).toHaveLength(1);
+      expect((first(r).shapes[0] as { color?: string }).color).toBeUndefined();
     });
   }
+});
+
+describe('a session of several diagrams', () => {
+  const named = (title: string): Diagram => ({ ...emptyDiagram(), title });
+  const three = (): Session => ({
+    title: 'Tuesday',
+    diagrams: [named('Warm-up'), named('4v3'), named('Game')],
+  });
+
+  it('round-trips every diagram, in order, under the session name', () => {
+    const r = parse(serialize(three()));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.title).toBe('Tuesday');
+    expect(r.session.diagrams.map((d) => d.title)).toEqual(['Warm-up', '4v3', 'Game']);
+  });
+
+  it('opens a version 1 file as a session of one', () => {
+    // The file a coach saved yesterday. Refusing it by version number would be
+    // refusing their own work.
+    const v1 = {
+      kind: FILE_KIND,
+      version: 1,
+      diagram: {
+        ...emptyDiagram(),
+        title: 'Pressing',
+        shapes: [{ k: 'player', id: 'p', team: 'own', number: 9, x: 10, y: 10, rot: 0, scale: 1 }],
+      },
+    };
+    const r = parse(JSON.stringify(v1));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.diagrams).toHaveLength(1);
+    expect(r.session.diagrams[0].shapes).toHaveLength(1);
+    // No session name of its own, so the diagram's is the closest thing to what
+    // the coach called it.
+    expect(r.session.title).toBe('Pressing');
+  });
+
+  it('refuses a version it does not know', () => {
+    const r = parse(JSON.stringify({ kind: FILE_KIND, version: 99, diagrams: [] }));
+    expect(r.ok).toBe(false);
+  });
+
+  it('never opens with nothing to draw on', () => {
+    const r = parse(JSON.stringify({ kind: FILE_KIND, version: FILE_VERSION, diagrams: [] }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.diagrams).toHaveLength(1);
+  });
+
+  it('caps the list and counts what it dropped', () => {
+    const many = Array.from({ length: MAX_DIAGRAMS + 4 }, (_, i) => named(`D${i}`));
+    const r = parse(serialize({ title: 'Big', diagrams: many }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.session.diagrams).toHaveLength(MAX_DIAGRAMS);
+    expect(r.dropped).toBe(4);
+  });
+
+  it('adds and duplicates next to the one in hand, and shows it', () => {
+    const s = three();
+    const added = addDiagram(s, 0, emptyDiagram());
+    expect(added.active).toBe(1);
+    expect(added.session.diagrams.map((d) => d.title)).toEqual(['Warm-up', '', '4v3', 'Game']);
+
+    const copied = duplicateDiagram(s, 1);
+    expect(copied.active).toBe(2);
+    expect(copied.session.diagrams[2].title).toBe('4v3 copy');
+  });
+
+  it('copies deeply enough that editing the copy cannot reach the original', () => {
+    const s: Session = {
+      title: 'x',
+      diagrams: [
+        {
+          ...emptyDiagram(),
+          shapes: [{ k: 'player', id: 'p', team: 'own', number: 9, x: 1, y: 1, rot: 0, scale: 1 }],
+        },
+      ],
+    };
+    const copied = duplicateDiagram(s, 0);
+    const copy = copied.session.diagrams[1];
+    (copy.shapes[0] as { x: number }).x = 999;
+    expect((s.diagrams[0].shapes[0] as { x: number }).x).toBe(1);
+  });
+
+  it('refuses to grow past the cap rather than silently dropping one', () => {
+    const full: Session = {
+      title: 'full',
+      diagrams: Array.from({ length: MAX_DIAGRAMS }, (_, i) => named(`D${i}`)),
+    };
+    expect(addDiagram(full, 0, emptyDiagram()).session).toBe(full);
+  });
+
+  it('shows the one that took its place when a diagram is deleted', () => {
+    const s = three();
+    const gone = removeDiagram(s, 1, emptyDiagram);
+    expect(gone.session.diagrams.map((d) => d.title)).toEqual(['Warm-up', 'Game']);
+    expect(gone.active).toBe(1);
+
+    // Deleting the last one lands on the new last one rather than off the end.
+    const end = removeDiagram(s, 2, emptyDiagram);
+    expect(end.active).toBe(1);
+  });
+
+  it('empties the last diagram rather than leaving nothing to draw on', () => {
+    const one: Session = { title: 'x', diagrams: [named('Only')] };
+    const gone = removeDiagram(one, 0, emptyDiagram);
+    expect(gone.session.diagrams).toHaveLength(1);
+    expect(gone.session.diagrams[0].title).toBe('');
+    expect(gone.active).toBe(0);
+  });
+
+  it('reorders, and follows the diagram that moved', () => {
+    const s = three();
+    const moved = moveDiagram(s, 2, 0);
+    expect(moved.session.diagrams.map((d) => d.title)).toEqual(['Game', 'Warm-up', '4v3']);
+    expect(moved.active).toBe(0);
+    // Past either end is a no-op, not a wrap.
+    expect(moveDiagram(s, 0, -1).session).toBe(s);
+  });
+
+  it('names an untitled diagram by its place in the session', () => {
+    expect(diagramLabel(emptyDiagram(), 2)).toBe('Diagram 3');
+    expect(diagramLabel(named('Rondo'), 0)).toBe('Rondo');
+  });
 });
 
 describe('palettes', () => {

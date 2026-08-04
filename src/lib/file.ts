@@ -1,9 +1,17 @@
 import { EQUIPMENT_IDS } from '../data/equipment';
 import { ALL_NUMBERS, DEFAULT_COLORS } from '../data/notation';
-import { MAX_BENDS, MAX_COORD, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
+import { MAX_BENDS, MAX_COORD, MAX_DIAGRAMS, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Session, type Shape } from '../types/diagram';
 
 export const FILE_KIND = 'soccer-session-diagram';
-export const FILE_VERSION = 1;
+
+/**
+ * 2 holds a list of diagrams; 1 held exactly one.
+ *
+ * Version 1 files still open — they become a session of one — because they are
+ * the files a coach already has on disk, and refusing them by version number
+ * would be refusing their own work.
+ */
+export const FILE_VERSION = 2;
 export const MAX_BYTES = 1024 * 1024;
 export const MAX_SHAPES = 400;
 
@@ -22,12 +30,20 @@ export function emptyDiagram(): Diagram {
   };
 }
 
-export function serialize(d: Diagram): string {
-  return JSON.stringify({ kind: FILE_KIND, version: FILE_VERSION, diagram: d }, null, 2);
+export function emptySession(): Session {
+  return { title: '', diagrams: [emptyDiagram()] };
+}
+
+export function serialize(session: Session): string {
+  return JSON.stringify(
+    { kind: FILE_KIND, version: FILE_VERSION, title: session.title, diagrams: session.diagrams },
+    null,
+    2,
+  );
 }
 
 export type ParseResult =
-  | { ok: true; diagram: Diagram; dropped: number }
+  | { ok: true; session: Session; dropped: number }
   | { ok: false; reason: string };
 
 /** Any angle is valid; it is just normalised so the stored value stays sane. */
@@ -56,11 +72,40 @@ export function parse(text: string): ParseResult {
   }
   const obj = raw as Record<string, unknown>;
   if (obj.kind !== FILE_KIND) return { ok: false, reason: "That file isn't a diagram from this app." };
-  if (obj.version !== FILE_VERSION) {
-    return { ok: false, reason: `That diagram was saved by a different version (${String(obj.version)}).` };
+  if (obj.version !== 1 && obj.version !== FILE_VERSION) {
+    return { ok: false, reason: `That file was saved by a different version (${String(obj.version)}).` };
   }
 
-  const src = (obj.diagram ?? {}) as Record<string, unknown>;
+  // Version 1 was a single diagram; it opens as a session of one.
+  const list = Array.isArray(obj.diagrams)
+    ? obj.diagrams.slice(0, MAX_DIAGRAMS)
+    : [obj.diagram ?? {}];
+  let dropped = Array.isArray(obj.diagrams) ? Math.max(0, obj.diagrams.length - MAX_DIAGRAMS) : 0;
+
+  const diagrams: Diagram[] = [];
+  for (const entry of list) {
+    if (typeof entry !== 'object' || entry === null) {
+      dropped++;
+      continue;
+    }
+    const one = parseDiagram(entry as Record<string, unknown>);
+    diagrams.push(one.diagram);
+    dropped += one.dropped;
+  }
+  if (diagrams.length === 0) diagrams.push(emptyDiagram());
+
+  const title =
+    typeof obj.title === 'string'
+      ? obj.title.slice(0, 200)
+      : // A v1 file has no session name of its own; the diagram's is the closest
+        // thing to what the coach called it.
+        diagrams[0].title;
+
+  return { ok: true, session: { title, diagrams }, dropped };
+}
+
+/** One diagram out of the file, with everything unreadable dropped and counted. */
+function parseDiagram(src: Record<string, unknown>): { diagram: Diagram; dropped: number } {
   const out = emptyDiagram();
   out.title = typeof src.title === 'string' ? src.title.slice(0, 200) : '';
 
@@ -82,12 +127,12 @@ export function parse(text: string): ParseResult {
     opp: hex(c.opp, DEFAULT_COLORS.opp),
   };
 
-  const list = Array.isArray(src.shapes) ? src.shapes.slice(0, MAX_SHAPES) : [];
+  const shapeList = Array.isArray(src.shapes) ? src.shapes.slice(0, MAX_SHAPES) : [];
   let dropped = Array.isArray(src.shapes) ? Math.max(0, src.shapes.length - MAX_SHAPES) : 0;
   const shapes: Shape[] = [];
   const seen = new Set<string>();
 
-  for (const item of list) {
+  for (const item of shapeList) {
     if (typeof item !== 'object' || item === null) {
       dropped++;
       continue;
@@ -216,12 +261,12 @@ export function parse(text: string): ParseResult {
     };
   });
 
-  return { ok: true, diagram: out, dropped };
+  return { diagram: out, dropped };
 }
 
-export function filename(d: Diagram, ext: string): string {
+export function filename(named: { title: string }, ext: string): string {
   const slug =
-    d.title
+    named.title
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
