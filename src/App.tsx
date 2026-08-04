@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, deleteShapes, type Tool } from './components/Canvas';
-import { PlayerToken } from './components/Tokens';
-import { EQUIPMENT } from './data/equipment';
+import { KitMark, PlayerToken } from './components/Tokens';
+import { EQUIPMENT, equipmentSpec } from './data/equipment';
 import {
   FORMATIONS,
   MAX_SIDE,
@@ -56,6 +56,37 @@ function Panel({
       </h2>
       {open && children}
     </section>
+  );
+}
+
+/**
+ * A palette preview of a piece of equipment.
+ *
+ * The goals share one frame, so a mini goal is drawn visibly smaller than a full
+ * one — they differ by size and nothing else, and a grid that fits each item to
+ * its own cell would make the five goal variants identical. Everything else does
+ * fit its own cell, because nobody is going to confuse a cone with a bench and a
+ * true-to-scale ball would be four pixels across.
+ */
+function KitIcon({ item }: { item: string }) {
+  const spec = equipmentSpec(item);
+  if (!spec) return null;
+  const box =
+    spec.group === 'Goals'
+      ? { w: 142, h: 58 }
+      : (() => {
+          const s = Math.max(spec.w, spec.h) + 8;
+          return { w: s, h: s };
+        })();
+  return (
+    <svg
+      viewBox={`${-box.w / 2} ${-box.h / 2} ${box.w} ${box.h}`}
+      width={42}
+      height={30}
+      aria-hidden="true"
+    >
+      <KitMark item={item} x={0} y={0} />
+    </svg>
   );
 }
 
@@ -704,9 +735,9 @@ export default function App() {
           <section>
             <h2>Lines</h2>
             <p className="hint">
-              Drag from where it starts to where it ends. Hold Shift to curve. Press
-              the letter to pick a line, or to retype whatever is selected. S returns
-              to select.
+              Drag from where it starts to where it ends — the line keeps the
+              shape you draw. Press the letter to pick a line, or to retype
+              whatever is selected. S returns to select.
             </p>
             {LINE_SPECS.map((s) => (
               <button
@@ -988,7 +1019,8 @@ export default function App() {
                   onClick={() => setTool({ kind: 'kit', item: e.id })}
                   title={e.label}
                 >
-                  {e.label}
+                  <KitIcon item={e.id} />
+                  <span>{e.label}</span>
                 </button>
               ))}
             </div>

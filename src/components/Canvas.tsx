@@ -40,7 +40,7 @@ interface Drag {
   start: Point;
   now: Point;
   shift: boolean;
-  /** Sampled pointer path, used to read the bow out of a Shift drag. */
+  /** Sampled pointer path: for a line drag, this is the line's shape. */
   path: Point[];
   /** For endpoint and bend drags: which line, and which end of it. */
   lineId?: string;
@@ -89,23 +89,6 @@ const HANDLE_GRAB = 16;
 
 let seq = 0;
 const nextId = (p: string) => `${p}${++seq}-${Math.floor(Math.random() * 1e6).toString(36)}`;
-
-/**
- * The bow of a Shift drag, taken from how far the pointer strayed from the
- * straight line between where the drag started and where it ended.
- *
- * Reading it from the release point instead — which is what this did first —
- * always gives zero, because the release point is by definition on the chord.
- * So Shift appeared to do nothing.
- */
-function bendFromPath(path: Point[], a: Point, b: Point): number {
-  let best = 0;
-  for (const p of path) {
-    const d = bendFor(a, b, p);
-    if (Math.abs(d) > Math.abs(best)) best = d;
-  }
-  return best;
-}
 
 /** The box drawn around a selected token, and used to place its rotate knob. */
 function chromeBox(sh: Shape, kitSize: (id: string) => Point): { w: number; h: number } {
@@ -386,7 +369,7 @@ export function Canvas({
         setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
         return;
       }
-      setDrag({ mode: 'line', start: p, now: p, shift: e.shiftKey, path: [p] });
+      setDrag({ mode: 'line', start: p, now: p, shift: false, path: [p] });
       return;
     }
 
@@ -474,7 +457,11 @@ export function Canvas({
           shapes: diagram.shapes.map((sh) => {
             if (sh.k !== 'line' || sh.id !== drag.lineId) return sh;
             const { a, b } = lineEnds(diagram, sh);
-            return { ...sh, bend: bendFor(a, b, p) };
+            // Bowing from the midpoint replaces a drawn shape with one clean
+            // arc. Keeping the waypoints would leave the handle apparently
+            // doing nothing, since they are what describes the line.
+            const { bends: _drop, ...rest } = sh;
+            return { ...rest, bend: bendFor(a, b, p) };
           }),
         },
         false,
@@ -525,17 +512,16 @@ export function Canvas({
       if (Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > 24) {
         const fromPlayer = playerAt(diagram, drag.start);
         const toPlayer = playerAt(diagram, p);
-        // Shift is the clean single arc; a plain drag keeps the shape your hand
-        // actually made. Anything close enough to straight fits no bends at all,
-        // so an ordinary drag still produces an ordinary line.
-        const freehand = drag.shift ? [] : fitBends(drag.path, drag.start, p, MAX_BENDS);
+        // The path IS the line. Anything close enough to straight fits no bends
+        // at all, so an ordinary drag still produces an ordinary line.
+        const freehand = fitBends(drag.path, drag.start, p, MAX_BENDS);
         const shape: Shape = {
           k: 'line',
           id: nextId('l'),
           type: tool.type,
           from: fromPlayer ? { ref: fromPlayer.id } : { ...drag.start },
           to: toPlayer ? { ref: toPlayer.id } : { ...p },
-          bend: drag.shift ? bendFromPath(drag.path, drag.start, p) : 0,
+          bend: 0,
           ...(freehand.length > 0 ? { bends: freehand } : {}),
           lastFrom: { ...drag.start },
           lastTo: { ...p },
@@ -615,15 +601,14 @@ export function Canvas({
     const spec = lineSpec(tool.type);
     const a = drag.start;
     const b = drag.now;
-    const bend = drag.shift ? bendFromPath(drag.path, a, b) : 0;
-    const bends = drag.shift ? undefined : fitBends(drag.path, a, b, MAX_BENDS);
+    const bends = fitBends(drag.path, a, b, MAX_BENDS);
     // Same geometry the finished line will use, so the preview does not jump
     // when the pointer comes up.
     const holdOffAt = (q: Point) => {
       const pl = playerAt(diagram, q);
       return pl ? PLAYER_RADIUS * pl.scale + TOKEN_GAP : 0;
     };
-    const g = strokeGeometry(a, b, bend, holdOffAt(a), holdOffAt(b), bends);
+    const g = strokeGeometry(a, b, 0, holdOffAt(a), holdOffAt(b), bends);
     const head = g.head;
     const d = g.points
       ? spec.wavy

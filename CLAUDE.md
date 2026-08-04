@@ -137,11 +137,14 @@ dropped and counted, colours matched against literal hex because they go
 straight into an SVG attribute. Nothing is evaluated or rendered as markup.
 
 **A drawn stroke and a clean arc are different things.** `bend` is one
-perpendicular offset — a single quadratic — and stays exactly that. `bends` is a
-list of waypoints, each relative to the chord (`t` along, `o` across), and when
-present it describes the shape instead. Freehand renders as a sampled polyline;
-a straight line and an arc keep their original two-number form, so nothing about
-them changed shape or file size.
+perpendicular offset — a single quadratic — and stays exactly that; it is now
+reached only by dragging a selected line's midpoint handle, which clears `bends`
+so the handle cannot appear to do nothing. `bends` is a list of waypoints, each
+relative to the chord (`t` along, `o` across), and when present it describes the
+shape instead. Drawing always fits `bends`: there is no modifier, because the
+pointer path is the line. Freehand renders as a sampled polyline; a straight
+line and an arc keep their original two-number form, so nothing about them
+changed shape or file size.
 
 **Sample the dribble wave by wavelength, not by length.** At ~3 units a step a
 24-unit oscillation got about eight points, and a sine through eight points is a

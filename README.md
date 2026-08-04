@@ -36,9 +36,9 @@ a neutral gets its bib. It keeps the shape of the side it is playing for.
   something already on the pitch selects it instead and hands the tool back.
 - **Draw a line**: press where it starts, release where it ends. The arrow head
   lands where you release.
-- **Curve**: just draw it. A plain drag keeps the shape your hand made, and
-  anything close to straight comes out straight. Hold **Shift** instead for one
-  clean arc.
+- **Curve**: just draw it. The line keeps the shape your hand made, and anything
+  close to straight comes out straight. Drag a selected line's midpoint handle
+  to bow it into a single clean arc instead.
 - **Attach**: release a line end over a player and it anchors there. Move that
   player and the line follows, changing length and angle with them.
 - **Select**: click, Shift-click to add, or drag a box on empty ground. Several

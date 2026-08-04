@@ -106,8 +106,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .lineBtn > span { flex: 1; min-width: 0; }
 .lineBtn.on { border-color: var(--accent); background: #eaf0f6; font-weight: 600; }
 
-.kitGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.kitBtn { background: var(--paper-2); border: 1px solid var(--line); border-radius: 5px; padding: 6px 4px; font-size: 10.5px; }
+/* Three columns of icon-over-label. The icon is what the eye finds; the label is
+   what stops "goal toppled" and "mini goal toppled" being a guessing game, and
+   it is the only label at all on touch, where a tooltip never fires. */
+.kitGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.kitBtn {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 5px;
+  padding: 5px 2px 4px; font-size: 9.5px; line-height: 1.15; text-align: center;
+  color: var(--muted);
+}
+.kitBtn svg { flex: none; }
+.kitBtn.on { color: var(--ink); }
 .kitBtn.on { border-color: var(--accent); background: #eaf0f6; font-weight: 600; }
 
 .stage { flex: 1; display: flex; justify-content: center; align-items: stretch; min-width: 0; min-height: 0; }
