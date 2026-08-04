@@ -107,8 +107,14 @@ belongs to the selection, and a new selection starts square.
 outside it cannot be seen, clicked, marquee'd or deleted — but still exports and
 prints. `confineToBox()` runs on every surface change and reports what it moved.
 
-**Every tool disarms after use.** A tool that stays armed turns the next click —
-usually meant to pick up what you just made — into another one of the same thing.
+**A tool stays armed until you aim at something that already exists.** Pressing
+an existing shape selects it, hands the tool back to Select and starts the move;
+empty grass creates. That is what makes sticky tools safe — the click meant to
+pick up the player you just placed used to drop a second one on top of it. Two
+consequences: handles are tested BEFORE the placement branch (a resize grip sits
+outside its token and would otherwise read as empty grass and place a cone), and
+players deliberately do not intercept the line tool, since a line usually starts
+on one.
 
 **The file shortcuts sit above the typing guard.** `⌘O`, `⌘S` and `⌘P` are
 handled before the `return` that ignores keys typed into an input: they should
@@ -129,6 +135,18 @@ the popover is open, or the caret jumps to the rail mid-word.
 input: size-capped, shape-checked, every enum and id validated, unknown values
 dropped and counted, colours matched against literal hex because they go
 straight into an SVG attribute. Nothing is evaluated or rendered as markup.
+
+**A drawn stroke and a clean arc are different things.** `bend` is one
+perpendicular offset — a single quadratic — and stays exactly that. `bends` is a
+list of waypoints, each relative to the chord (`t` along, `o` across), and when
+present it describes the shape instead. Freehand renders as a sampled polyline;
+a straight line and an arc keep their original two-number form, so nothing about
+them changed shape or file size.
+
+**Sample the dribble wave by wavelength, not by length.** At ~3 units a step a
+24-unit oscillation got about eight points, and a sine through eight points is a
+zigzag. `wavyPath` and `smoothThrough` both size their sampling so a wave gets
+~20.
 
 ## Data model notes
 

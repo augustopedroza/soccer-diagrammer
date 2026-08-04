@@ -12,16 +12,19 @@ import {
   lineEnds,
   PLAYER_RADIUS,
   TOKEN_GAP,
+  fitBends,
   playerAt,
   pointOnCurve,
+  polyPath,
   rotatePt,
   strokeGeometry,
+  wavyAlong,
   textBox,
   transformed,
   wavyPath,
   type Point,
 } from '../lib/geometry';
-import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
+import { DEFAULT_SCALE, MAX_BENDS, ROTATE_STEP, TEXT_SIZES, isRef, type Diagram, type LineType, type Shape, type Team } from '../types/diagram';
 import { SurfaceSvg } from './Surface';
 import { KitMark, LineMark, PlayerMark, TextMark } from './Tokens';
 
@@ -227,7 +230,6 @@ export function Canvas({
   selected,
   onSelect,
   onChange,
-  onToolUsed,
   onEditShape,
   onSelectExisting,
 }: {
@@ -236,7 +238,6 @@ export function Canvas({
   selected: ReadonlySet<string>;
   onSelect: (ids: ReadonlySet<string>) => void;
   onChange: (next: Diagram, commit: boolean) => void;
-  onToolUsed: () => void;
   /** Double-click: edit that shape where it stands — a shirt number, a label. */
   onEditShape?: (id: string, at: { x: number; y: number }) => void;
   /** A line tool press landed on an existing line: hand the tool back. */
@@ -292,36 +293,10 @@ export function Canvas({
     const p = toSurface(e);
     e.currentTarget.setPointerCapture?.(e.pointerId);
 
-    if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
-      const shape: Shape =
-        tool.kind === 'player'
-          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: DEFAULT_SCALE, ...p }
-          : tool.kind === 'kit'
-            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: DEFAULT_SCALE, ...p }
-            : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[0], rot: 0, ...p };
-      onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
-      onSelect(new Set([shape.id]));
-      onToolUsed();
-      return;
-    }
-
-    if (tool.kind === 'line') {
-      // Pressing on an arrow that is already there picks it up instead of
-      // drawing another one over it, and hands the tool back to Select — the
-      // only reason to aim at an existing line is to work on it. Players do NOT
-      // intercept this way, because a line usually starts on one.
-      const existing = hitTest(diagram, p, kitSize);
-      if (existing?.k === 'line') {
-        onSelect(new Set([existing.id]));
-        onSelectExisting?.();
-        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
-        return;
-      }
-      setDrag({ mode: 'line', start: p, now: p, shift: e.shiftKey, path: [p] });
-      return;
-    }
-
-    // The frame's handles sit on top of everything, so they are tested first.
+    // The handles sit on top of everything, so they are tested first — before
+    // the placement tools too. A tool that stays armed would otherwise turn a
+    // press on a resize grip into another cone, since a grip sits outside the
+    // token it belongs to and reads as empty grass.
     // With several things selected there is one frame around the lot, and both
     // handles act on all of them.
     if (frame) {
@@ -374,6 +349,45 @@ export function Canvas({
         setDrag({ mode: 'bend', start: p, now: p, shift: false, path: [p], lineId: l.id });
         return;
       }
+    }
+
+    if (tool.kind === 'player' || tool.kind === 'kit' || tool.kind === 'text') {
+      // One rule for every tool: armed until you aim at something that is
+      // already there. Pressing an existing shape picks it up and hands the tool
+      // back, which is what makes a sticky tool safe — the click meant to grab
+      // the player you just placed used to drop a second one on top of it.
+      const existing = hitTest(diagram, p, kitSize);
+      if (existing) {
+        onSelect(new Set([existing.id]));
+        onSelectExisting?.();
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        return;
+      }
+      const shape: Shape =
+        tool.kind === 'player'
+          ? { k: 'player', id: nextId('p'), team: tool.team, number: tool.number, rot: 0, scale: DEFAULT_SCALE, ...p }
+          : tool.kind === 'kit'
+            ? { k: 'kit', id: nextId('k'), item: tool.item, rot: 0, scale: DEFAULT_SCALE, ...p }
+            : { k: 'text', id: nextId('t'), text: 'Label', size: TEXT_SIZES[0], rot: 0, ...p };
+      onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
+      onSelect(new Set([shape.id]));
+      return;
+    }
+
+    if (tool.kind === 'line') {
+      // Pressing on an arrow that is already there picks it up instead of
+      // drawing another one over it, and hands the tool back to Select — the
+      // only reason to aim at an existing line is to work on it. Players do NOT
+      // intercept this way, because a line usually starts on one.
+      const existing = hitTest(diagram, p, kitSize);
+      if (existing?.k === 'line') {
+        onSelect(new Set([existing.id]));
+        onSelectExisting?.();
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        return;
+      }
+      setDrag({ mode: 'line', start: p, now: p, shift: e.shiftKey, path: [p] });
+      return;
     }
 
     const hit = hitTest(diagram, p, kitSize);
@@ -511,6 +525,10 @@ export function Canvas({
       if (Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > 24) {
         const fromPlayer = playerAt(diagram, drag.start);
         const toPlayer = playerAt(diagram, p);
+        // Shift is the clean single arc; a plain drag keeps the shape your hand
+        // actually made. Anything close enough to straight fits no bends at all,
+        // so an ordinary drag still produces an ordinary line.
+        const freehand = drag.shift ? [] : fitBends(drag.path, drag.start, p, MAX_BENDS);
         const shape: Shape = {
           k: 'line',
           id: nextId('l'),
@@ -518,17 +536,16 @@ export function Canvas({
           from: fromPlayer ? { ref: fromPlayer.id } : { ...drag.start },
           to: toPlayer ? { ref: toPlayer.id } : { ...p },
           bend: drag.shift ? bendFromPath(drag.path, drag.start, p) : 0,
+          ...(freehand.length > 0 ? { bends: freehand } : {}),
           lastFrom: { ...drag.start },
           lastTo: { ...p },
         };
         onChange({ ...diagram, shapes: [...diagram.shapes, shape] }, true);
-        // Deliberately NOT selected. The tool drops back to Select, so the new
-        // arrow can be hovered and clicked straight away; auto-selecting it
-        // instead would drop three handles on top of the players it was just
-        // joined to, and make the next line-type keystroke retype it rather than
-        // arm the tool.
+        // Deliberately NOT selected. The tool stays armed for the next arrow,
+        // and auto-selecting this one would drop three handles on top of the
+        // players it was just joined to, and make the next line-type keystroke
+        // retype it rather than arm the tool.
         onSelect(new Set());
-        onToolUsed();
       }
     }
 
@@ -599,17 +616,22 @@ export function Canvas({
     const a = drag.start;
     const b = drag.now;
     const bend = drag.shift ? bendFromPath(drag.path, a, b) : 0;
+    const bends = drag.shift ? undefined : fitBends(drag.path, a, b, MAX_BENDS);
     // Same geometry the finished line will use, so the preview does not jump
     // when the pointer comes up.
     const holdOffAt = (q: Point) => {
       const pl = playerAt(diagram, q);
       return pl ? PLAYER_RADIUS * pl.scale + TOKEN_GAP : 0;
     };
-    const g = strokeGeometry(a, b, bend, holdOffAt(a), holdOffAt(b));
+    const g = strokeGeometry(a, b, bend, holdOffAt(a), holdOffAt(b), bends);
     const head = g.head;
-    const d = spec.wavy
-      ? wavyPath(g.a, g.c, g.b)
-      : `M${g.a.x},${g.a.y} Q${g.c.x},${g.c.y} ${g.b.x},${g.b.y}`;
+    const d = g.points
+      ? spec.wavy
+        ? wavyAlong(g.points)
+        : polyPath(g.points)
+      : spec.wavy
+        ? wavyPath(g.a, g.c, g.b)
+        : `M${g.a.x},${g.a.y} Q${g.c.x},${g.c.y} ${g.b.x},${g.b.y}`;
     return (
       <g opacity={0.75}>
         <path

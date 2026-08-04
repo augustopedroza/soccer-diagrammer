@@ -2,6 +2,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   isRef,
+  type Bend,
   type Diagram,
   type Endpoint,
   type LineShape,
@@ -130,9 +131,11 @@ export function wavyPath(a: Point, c: Point, b: Point, amp = WAVE_AMP): string {
   const WAVELENGTH = 24; // surface units per full oscillation
   const AMP = amp;
 
-  // Sample finely enough for the longest the curve could be.
+  // Sample by WAVELENGTH, not by length alone. At roughly three units a step a
+  // 24-unit oscillation got about eight points, and a sine drawn through eight
+  // points is a zigzag; this gives ~20 a wave, which reads as a curve.
   const bound = dist(a, c) + dist(c, b);
-  const steps = Math.max(24, Math.min(480, Math.round(bound / 3)));
+  const steps = Math.max(48, Math.min(1600, Math.round((bound / WAVELENGTH) * 20)));
 
   const samples: { p: Point; t: number; s: number }[] = [];
   let run = 0;
@@ -161,6 +164,36 @@ export function wavyPath(a: Point, c: Point, b: Point, amp = WAVE_AMP): string {
   return `M${pts.join(' L')}`;
 }
 
+/** A sampled stroke as an SVG path. */
+export function polyPath(pts: Point[]): string {
+  return `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L')}`;
+}
+
+/**
+ * The dribble wave, laid along a sampled stroke.
+ *
+ * Same rule as the quadratic version — arc length, whole oscillations, tapered
+ * at both ends — so a freehand dribble and a drawn-arc one are the same mark.
+ */
+export function wavyAlong(pts: Point[], amp = WAVE_AMP): string {
+  if (pts.length < 3) return polyPath(pts);
+  const WAVELENGTH = 24;
+  const run: number[] = [0];
+  for (let i = 1; i < pts.length; i++) run.push(run[i - 1] + dist(pts[i - 1], pts[i]));
+  const total = run[run.length - 1] || 1;
+  const waves = Math.max(2, Math.round(total / WAVELENGTH));
+
+  const out = pts.map((p, i) => {
+    const prev = pts[Math.max(0, i - 1)];
+    const next = pts[Math.min(pts.length - 1, i + 1)];
+    const ang = Math.atan2(next.y - prev.y, next.x - prev.x);
+    const u = run[i] / total;
+    const off = Math.sin(u * waves * Math.PI * 2) * amp * Math.sin(Math.PI * u);
+    return { x: p.x - Math.sin(ang) * off, y: p.y + Math.cos(ang) * off };
+  });
+  return polyPath(out);
+}
+
 /**
  * The part of a quadratic between two parameters, as a quadratic of its own.
  *
@@ -187,6 +220,127 @@ export interface StrokeGeometry {
   c: Point;
   head: Point;
   angle: number;
+  /**
+   * The stroke as points, for a freehand line only.
+   *
+   * A straight line and a single arc stay exactly what they were — two numbers
+   * and a control point — so nothing about them changes shape or file size. Only
+   * a drawn stroke needs the sampled form.
+   */
+  points?: Point[];
+}
+
+/** Where a line's waypoints actually are, given where its ends are now. */
+export function bendPoints(a: Point, b: Point, bends: Bend[]): Point[] {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  return bends.map(({ t, o }) => ({
+    x: a.x + ux * (t * len) - uy * o,
+    y: a.y + uy * (t * len) + ux * o,
+  }));
+}
+
+/**
+ * A smooth line through every point, sampled.
+ *
+ * Catmull-Rom, so the curve passes *through* the waypoints rather than being
+ * pulled towards them — a freehand stroke that missed the place the coach drew
+ * it would be a worse record of their intent than the raw jitter was.
+ */
+export function smoothThrough(pts: Point[]): Point[] {
+  if (pts.length < 2) return pts.slice();
+  const out: Point[] = [pts[0]];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    // Density follows the segment's own length, so a long stroke is sampled as
+    // finely as a short one — a dribble's wave rides on these points, and too
+    // few of them turn it into a zigzag.
+    const per = Math.max(8, Math.min(200, Math.round(dist(p1, p2) / 1.5)));
+    for (let s = 1; s <= per; s++) {
+      const t = s / per;
+      const t2 = t * t;
+      const t3 = t2 * t;
+      out.push({
+        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+      });
+    }
+  }
+  return out;
+}
+
+/** Perpendicular distance from a point to the segment a-b, for simplification. */
+function perpDist(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return dist(p, a);
+  return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
+}
+
+/** Ramer-Douglas-Peucker: the fewest points that still describe the stroke. */
+function simplify(pts: Point[], tol: number): Point[] {
+  if (pts.length < 3) return pts.slice();
+  let worst = 0;
+  let at = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = perpDist(pts[i], pts[0], pts[pts.length - 1]);
+    if (d > worst) {
+      worst = d;
+      at = i;
+    }
+  }
+  if (worst <= tol) return [pts[0], pts[pts.length - 1]];
+  return [
+    ...simplify(pts.slice(0, at + 1), tol).slice(0, -1),
+    ...simplify(pts.slice(at), tol),
+  ];
+}
+
+/**
+ * How far the hand has to stray before it counts as a curve rather than wobble.
+ *
+ * About half a player token. Below this a drag meant to be straight comes out
+ * straight, which matters more than catching every nuance: most arrows on a
+ * session plan are passes, and a pass drawn with a slightly unsteady hand should
+ * not arrive as a wiggle.
+ */
+export const FREEHAND_TOLERANCE = 14;
+
+/**
+ * The waypoints of a freehand stroke, read off the path the pointer took.
+ *
+ * Returns an empty list for anything close enough to straight, so an ordinary
+ * drag still produces an ordinary line and nothing has to be undone.
+ */
+export function fitBends(path: Point[], a: Point, b: Point, max = 6): Bend[] {
+  if (path.length < 3) return [];
+  const kept = simplify(path, FREEHAND_TOLERANCE).slice(1, -1);
+  if (kept.length === 0) return [];
+
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return [];
+  const ux = dx / len;
+  const uy = dy / len;
+
+  const all = kept.map((p) => {
+    const vx = p.x - a.x;
+    const vy = p.y - a.y;
+    return { t: (vx * ux + vy * uy) / len, o: vx * -uy + vy * ux };
+  });
+
+  // Thin out evenly rather than truncating, or a long stroke would keep its
+  // first few wiggles and lose the shape of everything after them.
+  const step = Math.max(1, Math.ceil(all.length / max));
+  return all.filter((_, i) => i % step === 0).slice(0, max);
 }
 
 /**
@@ -210,7 +364,34 @@ export function strokeGeometry(
   /** How far to hold off each end, in surface units. 0 leaves that end alone. */
   rA: number,
   rB: number,
+  bends?: Bend[],
 ): StrokeGeometry {
+  if (bends && bends.length > 0) {
+    // A freehand stroke is trimmed by walking its samples in from each end,
+    // which is the same rule as the curve walk below — just on a path that has
+    // no single control point to subdivide.
+    const pts = smoothThrough([a, ...bendPoints(a, b, bends), b]);
+    let lo = 0;
+    let hi = pts.length - 1;
+    if (rA > 0) while (lo < hi - 1 && dist(pts[lo], a) < rA) lo++;
+    if (rB > 0) while (hi > lo + 1 && dist(pts[hi], b) < rB) hi--;
+    if (hi - lo < 4) {
+      lo = 0;
+      hi = pts.length - 1;
+    }
+    const kept = pts.slice(lo, hi + 1);
+    const last = kept[kept.length - 1];
+    const prev = kept[kept.length - 2] ?? kept[0];
+    return {
+      a: kept[0],
+      b: last,
+      c: kept[Math.floor(kept.length / 2)],
+      head: last,
+      angle: (Math.atan2(last.y - prev.y, last.x - prev.x) * 180) / Math.PI,
+      points: kept,
+    };
+  }
+
   const c = controlPoint(a, b, bend);
   const STEPS = 96;
 
@@ -276,7 +457,7 @@ export function holdOff(d: Diagram, e: Endpoint): number {
 
 export function lineGeometry(d: Diagram, l: LineShape): StrokeGeometry {
   const { a, b } = lineEnds(d, l);
-  return strokeGeometry(a, b, l.bend, holdOff(d, l.from), holdOff(d, l.to));
+  return strokeGeometry(a, b, l.bend, holdOff(d, l.from), holdOff(d, l.to), l.bends);
 }
 
 /** Perpendicular distance from a point to a segment, clamped to its ends. */
@@ -291,7 +472,15 @@ function distToSegment(p: Point, a: Point, b: Point): number {
 
 /** How far a point is from a line's drawn path, sampled along the curve. */
 export function distToLine(d: Diagram, l: LineShape, p: Point): number {
-  const { a, b, c } = lineGeometry(d, l);
+  const g = lineGeometry(d, l);
+  if (g.points) {
+    let best = Infinity;
+    for (let i = 1; i < g.points.length; i++) {
+      best = Math.min(best, distToSegment(p, g.points[i - 1], g.points[i]));
+    }
+    return best;
+  }
+  const { a, b, c } = g;
   let best = Infinity;
   let prev = pointOnCurve(a, c, b, 0);
   const N = 40;
@@ -451,9 +640,10 @@ export function transformed(
         to: isRef(s.to) ? s.to : mapPt(s.to),
         lastFrom: mapPt(s.lastFrom),
         lastTo: mapPt(s.lastTo),
-        // Bend is a perpendicular offset, so it is unaffected by rotation but
-        // has to grow with the line or a curve straightens as it is scaled.
+        // An offset is perpendicular, so rotation leaves it alone, but it has
+        // to grow with the line or a curve straightens as it is scaled.
         bend: s.bend * k,
+        ...(s.bends ? { bends: s.bends.map((w) => ({ t: w.t, o: w.o * k })) } : {}),
       };
     }
     const at = mapPt({ x: s.x, y: s.y });

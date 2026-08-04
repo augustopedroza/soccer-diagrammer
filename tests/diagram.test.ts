@@ -13,7 +13,9 @@ import {
   PLAYER_RADIUS,
   TOKEN_GAP,
   bendFor,
+  bendPoints,
   confineToBox,
+  fitBends,
   controlPoint,
   hitTest,
   lineEnds,
@@ -26,7 +28,7 @@ import {
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
-import type { Diagram } from '../src/types/diagram';
+import { MAX_BENDS, type Diagram } from '../src/types/diagram';
 
 function withPlayers(): Diagram {
   const d = emptyDiagram();
@@ -165,6 +167,109 @@ describe('a curved arrow into a player', () => {
     // whose head has crossed over its own tail.
     expect(g.a).toEqual({ x: 300, y: 700 });
     expect(g.head).toEqual({ x: 310, y: 690 });
+  });
+});
+
+describe('freehand', () => {
+  const a = { x: 100, y: 100 };
+  const b = { x: 500, y: 100 };
+  /** A drag sampled along a path, the way the pointer would deliver it. */
+  const along = (f: (u: number) => { x: number; y: number }, n = 40) =>
+    Array.from({ length: n + 1 }, (_, i) => f(i / n));
+
+  it('fits no bends to a drag that was meant to be straight', () => {
+    // A steady hand with a few units of wobble — well under the tolerance.
+    const path = along((u) => ({
+      x: a.x + (b.x - a.x) * u,
+      y: a.y + Math.sin(u * 9) * 4,
+    }));
+    expect(fitBends(path, a, b)).toEqual([]);
+  });
+
+  it('fits bends to a stroke that genuinely curves', () => {
+    const path = along((u) => ({
+      x: a.x + (b.x - a.x) * u,
+      y: a.y + Math.sin(u * Math.PI) * 120,
+    }));
+    const bends = fitBends(path, a, b);
+    expect(bends.length).toBeGreaterThan(0);
+    // Offsets are perpendicular to the chord, which here runs left to right.
+    expect(Math.max(...bends.map((w) => Math.abs(w.o)))).toBeGreaterThan(60);
+    for (const w of bends) {
+      expect(w.t).toBeGreaterThanOrEqual(0);
+      expect(w.t).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('never keeps more waypoints than the cap', () => {
+    const path = along((u) => ({
+      x: a.x + (b.x - a.x) * u,
+      y: a.y + Math.sin(u * 30) * 60,
+    }), 400);
+    expect(fitBends(path, a, b, MAX_BENDS).length).toBeLessThanOrEqual(MAX_BENDS);
+  });
+
+  it('holds its shape when the players at its ends move', () => {
+    // Relative storage is the whole point: the same waypoints, read against a
+    // moved chord, still sit the same way along and across it.
+    const bends = [{ t: 0.5, o: 60 }];
+    const near = bendPoints(a, b, bends)[0];
+    const moved = bendPoints({ x: 300, y: 300 }, { x: 700, y: 300 }, bends)[0];
+    expect(near.x - a.x).toBeCloseTo(moved.x - 300, 6);
+    expect(near.y - a.y).toBeCloseTo(moved.y - 300, 6);
+  });
+
+  it('still points its head at the player it is joined to', () => {
+    const d = withPlayers();
+    const freehand: Diagram = {
+      ...d,
+      shapes: d.shapes.map((s) =>
+        s.k === 'line' ? { ...s, bends: [{ t: 0.35, o: 70 }, { t: 0.7, o: -40 }] } : s,
+      ),
+    };
+    const g = lineGeometry(freehand, freehand.shapes.find((s) => s.k === 'line') as never);
+    expect(g.points).toBeDefined();
+    const gap = Math.hypot(g.head.x - 600, g.head.y - 400);
+    expect(gap).toBeGreaterThan(PLAYER_RADIUS);
+    const rad = (g.angle * Math.PI) / 180;
+    const ahead = { x: g.head.x + Math.cos(rad) * gap, y: g.head.y + Math.sin(rad) * gap };
+    expect(Math.hypot(ahead.x - 600, ahead.y - 400)).toBeLessThan(PLAYER_RADIUS);
+  });
+
+  it('round-trips its waypoints, and refuses malformed ones without losing the line', () => {
+    const d = withPlayers();
+    const freehand: Diagram = {
+      ...d,
+      shapes: d.shapes.map((s) => (s.k === 'line' ? { ...s, bends: [{ t: 0.4, o: 55 }] } : s)),
+    };
+    const round = parse(serialize(freehand));
+    expect(round.ok).toBe(true);
+    if (round.ok) {
+      const l = round.diagram.shapes.find((s) => s.k === 'line') as { bends?: unknown };
+      expect(l.bends).toEqual([{ t: 0.4, o: 55 }]);
+    }
+
+    const raw = {
+      kind: FILE_KIND,
+      version: FILE_VERSION,
+      diagram: {
+        ...emptyDiagram(),
+        shapes: [
+          {
+            k: 'line', id: 'l1', type: 'pass',
+            from: { x: 0, y: 0 }, to: { x: 100, y: 100 },
+            lastFrom: { x: 0, y: 0 }, lastTo: { x: 100, y: 100 },
+            bend: 0,
+            bends: [{ t: 5, o: 10 }, { t: 'x', o: 1 }, null, 'nope'],
+          },
+        ],
+      },
+    };
+    const hostile = parse(JSON.stringify(raw));
+    expect(hostile.ok).toBe(true);
+    if (!hostile.ok) return;
+    expect(hostile.diagram.shapes).toHaveLength(1);
+    expect((hostile.diagram.shapes[0] as { bends?: unknown }).bends).toBeUndefined();
   });
 });
 

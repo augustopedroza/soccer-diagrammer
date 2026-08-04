@@ -4,7 +4,9 @@ import {
   HEAD_GRAB,
   LINE_GRAB,
   lineGeometry,
+  polyPath,
   textBox,
+  wavyAlong,
   wavyPath,
   type Point,
 } from '../lib/geometry';
@@ -117,11 +119,15 @@ export function LineMark({
   // Ends are pulled back off any token they are attached to, or the arrow head
   // vanishes underneath the player it is pointing at. Same geometry the hit test
   // uses, so what you can click is what you can see.
-  const { a: ta, b: tb, c, head, angle } = lineGeometry(diagram, line);
+  const { a: ta, b: tb, c, head, angle, points } = lineGeometry(diagram, line);
 
-  const d = spec.wavy
-    ? wavyPath(ta, c, tb)
-    : `M${ta.x},${ta.y} Q${c.x},${c.y} ${tb.x},${tb.y}`;
+  const d = points
+    ? spec.wavy
+      ? wavyAlong(points)
+      : polyPath(points)
+    : spec.wavy
+      ? wavyPath(ta, c, tb)
+      : `M${ta.x},${ta.y} Q${c.x},${c.y} ${tb.x},${tb.y}`;
 
   return (
     <g className="lineMark">

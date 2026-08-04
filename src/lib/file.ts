@@ -1,6 +1,6 @@
 import { EQUIPMENT_IDS } from '../data/equipment';
 import { ALL_NUMBERS, DEFAULT_COLORS } from '../data/notation';
-import { MAX_COORD, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
+import { MAX_BENDS, MAX_COORD, MAX_LABEL, MAX_SCALE, MIN_SCALE, TEXT_SIZES, type Diagram, type Shape } from '../types/diagram';
 
 export const FILE_KIND = 'soccer-session-diagram';
 export const FILE_VERSION = 1;
@@ -172,6 +172,21 @@ export function parse(text: string): ParseResult {
         dropped++;
         continue;
       }
+      // Freehand waypoints. Anything malformed drops back to the plain line
+      // rather than losing the arrow: the ends are the part that carries the
+      // meaning, and they have already been checked.
+      const bends = Array.isArray(sh.bends)
+        ? sh.bends
+            .slice(0, MAX_BENDS)
+            .map((w) => {
+              if (typeof w !== 'object' || w === null) return null;
+              const rec = w as Record<string, unknown>;
+              const t = num(rec.t, 0, 1);
+              const o = num(rec.o, -MAX_COORD, MAX_COORD);
+              return t === null || o === null ? null : { t, o };
+            })
+            .filter((w): w is { t: number; o: number } => w !== null)
+        : [];
       shapes.push({
         k: 'line',
         id,
@@ -179,6 +194,7 @@ export function parse(text: string): ParseResult {
         from,
         to,
         bend: num(sh.bend, -MAX_COORD, MAX_COORD) ?? 0,
+        ...(bends.length > 0 ? { bends } : {}),
         lastFrom: lf,
         lastTo: lt,
       });

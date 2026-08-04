@@ -57,6 +57,22 @@ export interface PlayerShape {
   color?: string;
 }
 
+/**
+ * One waypoint on a line, held relative to the chord between its ends.
+ *
+ * `t` runs 0..1 from one end to the other and `o` is the perpendicular offset in
+ * surface units. Relative on purpose, and for the same reason `bend` is: a line
+ * anchored to players has to keep its shape when they move, and absolute
+ * waypoints would skew or self-cross the moment a player was dragged.
+ */
+export interface Bend {
+  t: number;
+  o: number;
+}
+
+/** A freehand stroke is capped here; past this it is drawing, not diagramming. */
+export const MAX_BENDS = 6;
+
 export interface LineShape {
   k: 'line';
   id: string;
@@ -65,6 +81,12 @@ export interface LineShape {
   to: Endpoint;
   /** Perpendicular bow, in surface units. 0 is a straight line. */
   bend: number;
+  /**
+   * Waypoints for a freehand line. When present these describe the shape and
+   * `bend` is ignored — a single clean arc and a drawn stroke are different
+   * things, and keeping both means neither has to approximate the other.
+   */
+  bends?: Bend[];
   /** Last resolved position of each end, so an anchor can be released safely. */
   lastFrom: { x: number; y: number };
   lastTo: { x: number; y: number };

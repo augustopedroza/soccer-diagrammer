@@ -921,12 +921,11 @@ export default function App() {
             selected={selected}
             onSelect={setSelected}
             onChange={change}
-            // Placement tools disarm; the line tool stays armed, because arrows
-            // come in sets — a pass, then the run onto it, then the finish. What
-            // makes that safe is the other half of the rule, below: pressing on
-            // an arrow that already exists picks it up rather than drawing over
-            // it, and hands the tool back.
-            onToolUsed={() => setTool((t) => (t.kind === 'line' ? t : { kind: 'select' }))}
+            // One rule for every tool: it stays armed until you aim at something
+            // that is already there. Cones and arrows come in sets, so a tool
+            // that disarmed after one use cost a trip to the palette for each;
+            // and the click that used to drop a second player on the one you had
+            // just placed now picks that player up instead.
             onSelectExisting={() => setTool({ kind: 'select' })}
             onEditShape={(id, at) => {
               const sh = diagram.shapes.find((s) => s.id === id);
