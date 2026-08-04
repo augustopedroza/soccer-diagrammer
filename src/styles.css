@@ -240,6 +240,43 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .handle, .handleBend, .selRing, .marquee, .snapRing, .chrome, .guide { display: none !important; }
 }
 
+/* The shortcuts sheet. */
+.sheet {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(16, 19, 23, .45);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.sheetCard {
+  background: var(--paper); border-radius: 10px; max-width: 720px; width: 100%;
+  max-height: 88vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,.3);
+}
+.sheetHead {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+  background: var(--paper); border-radius: 10px 10px 0 0;
+}
+.sheetHead h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.sheetHead button {
+  background: none; border: 0; font-size: 15px; color: var(--muted); padding: 4px 6px;
+}
+.sheetGroups {
+  padding: 14px 18px 18px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 28px;
+}
+.sheetGroups h3 {
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--faint); margin: 10px 0 6px;
+}
+.sheetRow {
+  display: flex; align-items: baseline; gap: 10px; padding: 3px 0; font-size: 12.5px;
+}
+.sheetKeys { flex: none; display: flex; gap: 3px; min-width: 106px; }
+.sheetRow kbd {
+  font: 600 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--paper-2); border: 1px solid var(--line); border-radius: 4px;
+  padding: 3px 5px; color: var(--ink);
+}
+
 /* Only ever seen on paper. */
 .printTitle {
   display: none;

@@ -34,7 +34,8 @@ import {
   moveDiagram,
   removeDiagram,
 } from '../src/lib/session';
-import { ALL_NUMBERS, bibRing } from '../src/data/notation';
+import { ALL_NUMBERS, LINE_SPECS, bibRing } from '../src/data/notation';
+import { SHORTCUT_GROUPS } from '../src/data/shortcuts';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
 import { MAX_BENDS, MAX_DIAGRAMS, type Diagram, type Session } from '../src/types/diagram';
@@ -995,6 +996,34 @@ describe('a bib that survives grey print', () => {
 
   it('leaves the team kit unringed, because the ring is what says "not one of these"', () => {
     expect(bibRing(undefined, '#1c6bba')).toBeUndefined();
+  });
+});
+
+describe('the shortcuts panel', () => {
+  const listed = SHORTCUT_GROUPS.flatMap((g) => g.items.flatMap((i) => i.keys));
+
+  it('lists every line type by its own letter', () => {
+    // The panel is the only place these are written down, so a fifth line type
+    // added without one should fail here rather than ship undiscoverable.
+    for (const spec of LINE_SPECS) {
+      expect(listed).toContain(spec.key.toUpperCase());
+    }
+  });
+
+  it('lists the keys that are not letters, which nothing else explains', () => {
+    for (const k of ['↑', '[', '⌫', '⌘Z', '⌘S', '?']) {
+      expect(listed).toContain(k);
+    }
+  });
+
+  it('says what each shortcut does', () => {
+    for (const g of SHORTCUT_GROUPS) {
+      expect(g.items.length).toBeGreaterThan(0);
+      for (const item of g.items) {
+        expect(item.keys.length).toBeGreaterThan(0);
+        expect(item.what.trim().length).toBeGreaterThan(0);
+      }
+    }
   });
 });
 

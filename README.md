@@ -61,6 +61,7 @@ session of one.
   numbered by typing — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
 - **Nudge**: arrow keys move the selection a unit at a time, ten with Shift.
   Dragging a token near another's line snaps it level and shows a guide.
+- **Every shortcut**: press `?`, or the button beside Print.
 - **Undo / redo**: `⌘Z` and `⇧⌘Z`. Copy, cut, paste and duplicate are `⌘C`,
   `⌘X`, `⌘V`, `⌘D`. Open, save and print are `⌘O`, `⌘S` and `⌘P`.
 

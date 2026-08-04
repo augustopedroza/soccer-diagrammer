@@ -13,6 +13,7 @@ import {
   type SmallSided,
 } from './data/formations';
 import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
+import { SHORTCUT_GROUPS } from './data/shortcuts';
 import { download, emptyDiagram, emptySession, filename, parse, serialize } from './lib/file';
 import { confineToBox, translated, wavyPath } from './lib/geometry';
 import {
@@ -88,6 +89,46 @@ function CropIcon({ crop }: { crop: Crop }) {
       <rect x={0} y={0} width={w} height={kept} rx={2} className="cropKept" />
       <line x1={0} y1={h / 2} x2={w} y2={h / 2} className="cropWhole" />
     </svg>
+  );
+}
+
+/**
+ * Every shortcut, on demand.
+ *
+ * The keys were only ever discoverable from hints buried in two palettes, and
+ * the ones that are not letters — nudging, turning, numbering — were not written
+ * down anywhere. Modal, because it is a thing you read and dismiss, not a panel
+ * to work alongside.
+ */
+function Shortcuts({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="sheet" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={onClose}>
+      <div className="sheetCard" onClick={(e) => e.stopPropagation()}>
+        <div className="sheetHead">
+          <h2>Keyboard shortcuts</h2>
+          <button autoFocus onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className="sheetGroups">
+          {SHORTCUT_GROUPS.map((g) => (
+            <section key={g.name}>
+              <h3>{g.name}</h3>
+              {g.items.map((item) => (
+                <div className="sheetRow" key={item.what}>
+                  <span className="sheetKeys">
+                    {item.keys.map((k) => (
+                      <kbd key={k}>{MOD === '⌘' ? k : k.replace('⌘', 'Ctrl+').replace('⇧', 'Shift+')}</kbd>
+                    ))}
+                  </span>
+                  <span>{item.what}</span>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -417,6 +458,7 @@ export default function App() {
         pasteShapes(diagram.shapes.filter((sh) => selected.has(sh.id)));
       }
       if (e.key === 'Escape') {
+        setShowKeys(false);
         setTool({ kind: 'select' });
         setSelected(new Set());
       }
@@ -467,6 +509,10 @@ export default function App() {
           numberSelected(ALL_NUMBERS.includes(n) ? n : null);
           numberBuffer.current = n === 1 ? { first: 1, at: now } : null;
         }
+      }
+      if (e.key === '?') {
+        e.preventDefault();
+        setShowKeys(true);
       }
       if (e.key.toLowerCase() === 's') setTool({ kind: 'select' });
       if (e.key.toLowerCase() === 'l') setTool({ kind: 'text' });
@@ -596,6 +642,8 @@ export default function App() {
     commitSession(moved.session, true);
     setActive(moved.active);
   }
+
+  const [showKeys, setShowKeys] = useState(false);
 
   /** Which tab is being renamed, if any. */
   const [renaming, setRenaming] = useState<number | null>(null);
@@ -807,6 +855,9 @@ export default function App() {
         <button onClick={saveFile} title={`Save (${MOD}S)`}>Save</button>
         <button className="primary" onClick={exportSvg}>Export image</button>
         <button onClick={printSheet} title={`Print (${MOD}P)`}>Print</button>
+        <button onClick={() => setShowKeys(true)} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+          ?
+        </button>
         <input
           ref={fileInput}
           type="file"
@@ -819,6 +870,8 @@ export default function App() {
           }}
         />
       </header>
+
+      {showKeys && <Shortcuts onClose={() => setShowKeys(false)} />}
 
       {notice && (
         <div className="notice" role="status" onClick={() => setNotice(null)} title="Dismiss">
