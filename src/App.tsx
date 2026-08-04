@@ -921,12 +921,13 @@ export default function App() {
             selected={selected}
             onSelect={setSelected}
             onChange={change}
-            // Every tool disarms once it has been used, lines included. Staying
-            // armed meant the next click — usually meant to pick up what had just
-            // been drawn — started another line instead, so a finished arrow
-            // could not be hovered or clicked without first going back to Select.
-            // Its keyboard shortcut re-arms it in one keystroke.
-            onToolUsed={() => setTool({ kind: 'select' })}
+            // Placement tools disarm; the line tool stays armed, because arrows
+            // come in sets — a pass, then the run onto it, then the finish. What
+            // makes that safe is the other half of the rule, below: pressing on
+            // an arrow that already exists picks it up rather than drawing over
+            // it, and hands the tool back.
+            onToolUsed={() => setTool((t) => (t.kind === 'line' ? t : { kind: 'select' }))}
+            onSelectExisting={() => setTool({ kind: 'select' })}
             onEditShape={(id, at) => {
               const sh = diagram.shapes.find((s) => s.id === id);
               if (sh?.k === 'player') {

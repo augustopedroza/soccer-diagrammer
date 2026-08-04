@@ -131,8 +131,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
    preview icons, where a grab cursor promises a drag the button does not do. */
 .canvas .token { cursor: grab; }
 /* The same grab a token gets. A line is one more object on the drawing, and
-   giving it its own cursor made it read as a different kind of thing. */
-.canvas.tool-select .lineHit { cursor: grab; }
+   giving it its own cursor made it read as a different kind of thing.
+   With the line tool armed it says the same thing for a different reason: this
+   press will pick that arrow up instead of starting a new one. */
+.canvas.tool-select .lineHit, .canvas.tool-line .lineHit { cursor: grab; }
 /* Everything else in a line is decoration as far as the pointer is concerned.
    The drawn stroke is painted ON TOP of the hit path, so without this it won
    the hover and the cursor went back to default in the one place a coach is

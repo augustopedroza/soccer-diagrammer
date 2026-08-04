@@ -229,6 +229,7 @@ export function Canvas({
   onChange,
   onToolUsed,
   onEditShape,
+  onSelectExisting,
 }: {
   diagram: Diagram;
   tool: Tool;
@@ -238,6 +239,8 @@ export function Canvas({
   onToolUsed: () => void;
   /** Double-click: edit that shape where it stands — a shirt number, a label. */
   onEditShape?: (id: string, at: { x: number; y: number }) => void;
+  /** A line tool press landed on an existing line: hand the tool back. */
+  onSelectExisting?: () => void;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -303,6 +306,17 @@ export function Canvas({
     }
 
     if (tool.kind === 'line') {
+      // Pressing on an arrow that is already there picks it up instead of
+      // drawing another one over it, and hands the tool back to Select — the
+      // only reason to aim at an existing line is to work on it. Players do NOT
+      // intercept this way, because a line usually starts on one.
+      const existing = hitTest(diagram, p, kitSize);
+      if (existing?.k === 'line') {
+        onSelect(new Set([existing.id]));
+        onSelectExisting?.();
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        return;
+      }
       setDrag({ mode: 'line', start: p, now: p, shift: e.shiftKey, path: [p] });
       return;
     }
@@ -392,9 +406,10 @@ export function Canvas({
       next = selected.has(hit.id) ? selected : new Set([hit.id]);
     }
     onSelect(next);
-    // Lines are positioned by their ends, so there is nothing to drag on one
-    // directly — selecting it is the whole gesture.
-    if (hit.k !== 'line') setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+    // A line moves like anything else. Its anchored ends stay with their
+    // players — those are not free to move — so dragging one that is pinned at
+    // both ends does nothing, which is the honest result rather than a bug.
+    setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
   }
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
