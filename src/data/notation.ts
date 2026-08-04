@@ -101,6 +101,21 @@ export const COLOR_PRESETS: { name: string; hex: string }[] = [
 
 export const DEFAULT_COLORS = { own: '#1c6bba', opp: '#d21f3c' };
 
+/**
+ * The ring a player wears when it is in its own colour rather than the kit.
+ *
+ * Neutrals are the reason per-player colour exists, and colour alone does not
+ * survive a grey printer or a Line Art sheet: a yellow triangle and a blue one
+ * are the same triangle once the hue is gone. A ring is a difference in mark,
+ * not in hue, so it survives both — and it is drawn in the token's own ink, so
+ * it cannot be mistaken for the blue of a selection.
+ *
+ * Returns nothing for a player in the team kit: the ring means "not one of
+ * these", and putting it on everyone would say nothing.
+ */
+export const bibRing = (own: string | undefined, fill: string): string | undefined =>
+  own ? inkOn(fill) : undefined;
+
 /** Readable label colour for a given kit colour. */
 export function inkOn(hex: string): string {
   const h = hex.replace('#', '');

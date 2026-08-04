@@ -1,5 +1,5 @@
 import { equipmentSpec } from '../data/equipment';
-import { DEFAULT_COLORS, inkOn, lineSpec } from '../data/notation';
+import { DEFAULT_COLORS, bibRing, inkOn, lineSpec } from '../data/notation';
 import {
   HEAD_GRAB,
   LINE_GRAB,
@@ -44,6 +44,7 @@ export function PlayerToken({
 }) {
   const r = 24;
   const fill = color ?? (team === 'own' ? colors.own : colors.opp);
+  const ring = bibRing(color, fill);
 
   // An equilateral triangle about the token centre, corners softened so it does
   // not read as a hazard sign next to the opposition disc.
@@ -72,7 +73,11 @@ export function PlayerToken({
           number that stayed upright while the triangle leaned looked like two
           marks that had come apart. Blank tokens carry no text at all. */}
       <g transform={`rotate(${rot})`}>
-        {team === 'own' ? <path d={tri} fill={fill} /> : <circle r={r} fill={fill} />}
+        {team === 'own' ? (
+          <path d={tri} fill={fill} stroke={ring} strokeWidth={ring ? 3 : undefined} />
+        ) : (
+          <circle r={r} fill={fill} stroke={ring} strokeWidth={ring ? 3 : undefined} />
+        )}
         {number !== null && (
           <text
             // A triangle is widest near its base, so the number sits below the

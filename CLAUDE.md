@@ -173,7 +173,11 @@ number would be refusing files the coach already has.
 
 - `PlayerShape.number` is `number | null`. **Blank is a real state**, not a
   missing value: a 4v3 has four attackers, not the 2, 6, 8 and 10.
-- `PlayerShape.color` is optional and overrides the team kit. It exists for
+- `PlayerShape.color` is optional and overrides the team kit. A player wearing
+  one gets a ring in its own ink (`bibRing`), because colour alone does not
+  survive a grey printer or a Line Art sheet — a yellow triangle and a blue one
+  are the same triangle once the hue is gone. Kit players get no ring: it means
+  "not one of these", so putting it on everyone would say nothing. It exists for
   neutrals, and it is per player rather than a third `Team` because a neutral is
   still one side's shape while it is playing. Absent means the kit — so it is
   omitted rather than written as the kit's own hex, or "back to the kit" would

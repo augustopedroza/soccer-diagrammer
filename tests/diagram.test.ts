@@ -34,7 +34,7 @@ import {
   moveDiagram,
   removeDiagram,
 } from '../src/lib/session';
-import { ALL_NUMBERS } from '../src/data/notation';
+import { ALL_NUMBERS, bibRing } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
 import { MAX_BENDS, MAX_DIAGRAMS, type Diagram, type Session } from '../src/types/diagram';
@@ -983,6 +983,18 @@ describe('a session of several diagrams', () => {
   it('names an untitled diagram by its place in the session', () => {
     expect(diagramLabel(emptyDiagram(), 2)).toBe('Diagram 3');
     expect(diagramLabel(named('Rondo'), 0)).toBe('Rondo');
+  });
+});
+
+describe('a bib that survives grey print', () => {
+  it('rings a player wearing its own colour, in a contrasting ink', () => {
+    // Light bib, dark ring; dark bib, light ring.
+    expect(bibRing('#e8b21f', '#e8b21f')).toBe('#14171c');
+    expect(bibRing('#1d232b', '#1d232b')).toBe('#ffffff');
+  });
+
+  it('leaves the team kit unringed, because the ring is what says "not one of these"', () => {
+    expect(bibRing(undefined, '#1c6bba')).toBeUndefined();
   });
 });
 
