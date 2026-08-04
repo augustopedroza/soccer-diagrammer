@@ -12,6 +12,7 @@ import {
   LINE_GRAB,
   PLAYER_RADIUS,
   TOKEN_GAP,
+  alignDelta,
   bendFor,
   bendPoints,
   confineToBox,
@@ -24,6 +25,7 @@ import {
   resolveEnd,
   textBox,
   transformed,
+  translated,
 } from '../src/lib/geometry';
 import { ALL_NUMBERS } from '../src/data/notation';
 import { EQUIPMENT } from '../src/data/equipment';
@@ -299,6 +301,57 @@ describe('changing the surface', () => {
     const l = shapes.find((s) => s.k === 'line') as { from: unknown; to: unknown };
     expect(l.from).toEqual({ ref: 'p1' });
     expect(l.to).toEqual({ ref: 'p2' });
+  });
+});
+
+describe('moving and lining up', () => {
+  const box = { w: 1000, h: 1200 };
+
+  it('moves everything selected, and nothing else', () => {
+    const d = withPlayers();
+    const out = translated(d.shapes, new Set(['p1', 'l1']), 20, -30, box);
+    const p1 = out.find((s) => s.id === 'p1') as { x: number; y: number };
+    expect([p1.x, p1.y]).toEqual([320, 670]);
+    expect(out.find((s) => s.id === 'p2')).toEqual(d.shapes.find((s) => s.id === 'p2'));
+  });
+
+  it('leaves an anchored line end where its player is', () => {
+    const d = withPlayers();
+    const out = translated(d.shapes, new Set(['l1']), 40, 40, box);
+    const l = out.find((s) => s.id === 'l1') as { from: unknown; lastFrom: { x: number } };
+    expect(l.from).toEqual({ ref: 'p1' });
+    // The stored fallback still travels, so releasing the anchor later keeps it
+    // where the coach last saw the line.
+    expect(l.lastFrom.x).toBe(340);
+  });
+
+  it('keeps the selection on the field', () => {
+    const d = withPlayers();
+    const out = translated(d.shapes, new Set(['p1']), 5000, 5000, box);
+    const p1 = out.find((s) => s.id === 'p1') as { x: number; y: number };
+    expect([p1.x, p1.y]).toEqual([box.w, box.h]);
+  });
+
+  it('lines a dragged token up with one already on the pitch', () => {
+    const d = withPlayers();
+    // p1 is at (300,700); p3 at (500,500). Drag p1 to just under p3's column.
+    const near = alignDelta(d.shapes, new Set(['p1']), 204, 0);
+    expect(near.dx).toBe(200);
+    expect(near.guideX).toBe(500);
+  });
+
+  it('leaves a drag alone when nothing is close', () => {
+    const d = withPlayers();
+    const far = alignDelta(d.shapes, new Set(['p1']), 120, 90);
+    expect(far).toEqual({ dx: 120, dy: 90, guideX: undefined, guideY: undefined });
+  });
+
+  it('never aligns the selection to itself', () => {
+    const d = withPlayers();
+    // Everything selected: with no fixed shape to measure against there is
+    // nothing to snap to, or a group could never leave its own alignment.
+    const all = alignDelta(d.shapes, new Set(['p1', 'p2', 'p3', 'l1']), 3, 3);
+    expect(all).toEqual({ dx: 3, dy: 3 });
   });
 });
 

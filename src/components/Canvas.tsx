@@ -13,8 +13,10 @@ import {
   PLAYER_RADIUS,
   TOKEN_GAP,
   fitBends,
+  alignDelta,
   playerAt,
   pointOnCurve,
+  translated,
   polyPath,
   rotatePt,
   strokeGeometry,
@@ -229,6 +231,15 @@ export function Canvas({
   const svgRef = useRef<SVGSVGElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [groupRot, setGroupRot] = useState(0);
+  /**
+   * Which lines a move is currently snapped to.
+   *
+   * A ref written during the move and read on the render that the move causes,
+   * rather than state: it is only ever a consequence of the drag, and putting it
+   * in state would be a second update per pointer move for something that cannot
+   * change on its own.
+   */
+  const moveGuides = useRef<{ x?: number; y?: number }>({});
   const box = surfaceBox(diagram.surface);
 
   /**
@@ -343,7 +354,7 @@ export function Canvas({
       if (existing) {
         onSelect(new Set([existing.id]));
         onSelectExisting?.();
-        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p], snapshot: diagram.shapes });
         return;
       }
       const shape: Shape =
@@ -366,7 +377,7 @@ export function Canvas({
       if (existing?.k === 'line') {
         onSelect(new Set([existing.id]));
         onSelectExisting?.();
-        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p], snapshot: diagram.shapes });
         return;
       }
       setDrag({ mode: 'line', start: p, now: p, shift: false, path: [p] });
@@ -382,7 +393,7 @@ export function Canvas({
       // as bare grass made a multi-selection undraggable except by its members,
       // and a drag there wiped the selection instead.
       if (!additive && frame?.group && insideFrame(frame, p)) {
-        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+        setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p], snapshot: diagram.shapes });
         return;
       }
       // Otherwise empty space starts a marquee. Without a modifier it also
@@ -406,7 +417,7 @@ export function Canvas({
     // A line moves like anything else. Its anchored ends stay with their
     // players — those are not free to move — so dragging one that is pinned at
     // both ends does nothing, which is the honest result rather than a bug.
-    setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p] });
+    setDrag({ mode: 'move', start: p, now: p, shift: false, path: [p], snapshot: diagram.shapes });
   }
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -468,28 +479,21 @@ export function Canvas({
       );
     }
 
-    if (drag.mode === 'move') {
-      const dx = p.x - drag.now.x;
-      const dy = p.y - drag.now.y;
-      const shift = (q: Point) => clampToBox({ x: q.x + dx, y: q.y + dy }, box);
+    if (drag.mode === 'move' && drag.snapshot) {
+      // Measured from where the drag started, not from the last frame: with
+      // snapping, an incremental delta would keep re-applying the correction and
+      // the selection would creep away from the pointer.
+      const snapped = alignDelta(
+        drag.snapshot,
+        selected,
+        p.x - drag.start.x,
+        p.y - drag.start.y,
+      );
+      moveGuides.current = { x: snapped.guideX, y: snapped.guideY };
       onChange(
         {
           ...diagram,
-          shapes: diagram.shapes.map((s) => {
-            if (!selected.has(s.id)) return s;
-            if (s.k === 'line') {
-              // A selected line travels too, but only its free ends: an
-              // anchored end is already following its player.
-              return {
-                ...s,
-                from: isRef(s.from) ? s.from : shift(s.from),
-                to: isRef(s.to) ? s.to : shift(s.to),
-                lastFrom: shift(s.lastFrom),
-                lastTo: shift(s.lastTo),
-              };
-            }
-            return { ...s, ...shift(s) };
-          }),
+          shapes: translated(drag.snapshot, selected, snapped.dx, snapped.dy, box),
         },
         false,
       );
@@ -579,6 +583,7 @@ export function Canvas({
     if (drag.mode === 'rotate' || drag.mode === 'scale') onChange(diagram, true);
     if (drag.mode === 'bend') onChange(diagram, true);
     if (drag.mode === 'move') onChange(diagram, true);
+    moveGuides.current = {};
     setDrag(null);
   }
 
@@ -709,6 +714,13 @@ export function Canvas({
         />
       )}
       {preview}
+      {/* Alignment guides, only while a move is snapped to something. */}
+      {drag?.mode === 'move' && moveGuides.current.x !== undefined && (
+        <line x1={moveGuides.current.x} y1={0} x2={moveGuides.current.x} y2={box.h} className="guide" />
+      )}
+      {drag?.mode === 'move' && moveGuides.current.y !== undefined && (
+        <line x1={0} y1={moveGuides.current.y} x2={box.w} y2={moveGuides.current.y} className="guide" />
+      )}
       {/* When several things are selected each one still gets a thin outline, so
           it stays obvious what is in the group; the handles belong to the frame
           around the lot rather than to any one member. */}

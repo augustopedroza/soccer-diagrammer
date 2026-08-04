@@ -47,6 +47,8 @@ a neutral gets its bib. It keeps the shape of the side it is playing for.
 - **Edit in place**: double-click a player to renumber it or a label to reword
   it, then Enter. Escape leaves it as it was. A selected player can also be
   numbered by typing — 1 then 0 for the 10, 1 then 1 for the 11, 0 for none.
+- **Nudge**: arrow keys move the selection a unit at a time, ten with Shift.
+  Dragging a token near another's line snaps it level and shows a guide.
 - **Undo / redo**: `⌘Z` and `⇧⌘Z`. Copy, cut, paste and duplicate are `⌘C`,
   `⌘X`, `⌘V`, `⌘D`. Open, save and print are `⌘O`, `⌘S` and `⌘P`.
 

@@ -200,7 +200,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
 
   .printTitle { display: block !important; }
-  .handle, .handleBend, .selRing, .marquee, .snapRing, .chrome { display: none !important; }
+  .handle, .handleBend, .selRing, .marquee, .snapRing, .chrome, .guide { display: none !important; }
 }
 
 /* Only ever seen on paper. */
@@ -303,6 +303,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 .handle { fill: #fff; stroke: #2f80ed; stroke-width: 2.5; cursor: grab; }
 .handleBend { fill: #2f80ed; stroke: #fff; }
+
+/* Alignment guides. Deliberately not the selection blue: this is the app
+   telling you something lines up, not showing you what you have hold of. */
+.guide { stroke: #e0417c; stroke-width: 1.5; stroke-dasharray: 7 5; pointer-events: none; }
 
 /* Shown while a line end is over a player it would attach to. */
 .snapRing {

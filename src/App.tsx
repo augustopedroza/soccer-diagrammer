@@ -14,7 +14,7 @@ import {
 } from './data/formations';
 import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
-import { confineToBox, wavyPath } from './lib/geometry';
+import { confineToBox, translated, wavyPath } from './lib/geometry';
 import { CROP_FRACTION, surfaceBox } from './lib/surfaceBox';
 import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
@@ -109,6 +109,14 @@ function KitIcon({ item }: { item: string }) {
     </svg>
   );
 }
+
+/** Arrow keys, as a delta in surface units before the Shift multiplier. */
+const NUDGES: Record<string, [number, number] | undefined> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
 
 /** How long a typed 1 waits to see whether it is really a 10 or an 11. */
 const NUMBER_CHASE_MS = 900;
@@ -364,6 +372,30 @@ export default function App() {
         setTool({ kind: 'select' });
         setSelected(new Set());
       }
+      // Arrow keys nudge: one unit, ten with Shift. A burst of presses is one
+      // undo step, not thirty — holding a key would otherwise fill the whole
+      // history with a single slow move.
+      const step = NUDGES[e.key];
+      if (step && selected.size > 0 && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        const by = e.shiftKey ? 10 : 1;
+        const now = Date.now();
+        const fresh = now - lastNudge.current > 700;
+        lastNudge.current = now;
+        change(
+          {
+            ...diagram,
+            shapes: translated(
+              diagram.shapes,
+              selected,
+              step[0] * by,
+              step[1] * by,
+              surfaceBox(diagram.surface),
+            ),
+          },
+          fresh,
+        );
+      }
       // Typing a number renumbers the selected players.
       //
       // 10 and 11 need two keystrokes, so a 1 is held briefly: press 1 and the
@@ -408,6 +440,7 @@ export default function App() {
     redo,
     selected,
     diagram,
+    change,
     commitNow,
     applyLine,
     rotateSelected,
@@ -466,6 +499,8 @@ export default function App() {
   const [customSided, setCustomSided] = useState<SmallSided>({ own: 4, opp: 3 });
   /** A just-typed 1, waiting to see whether a 0 or a 1 follows it. */
   const numberBuffer = useRef<{ first: number; at: number } | null>(null);
+  /** When the last arrow-key nudge landed, so a run of them is one undo step. */
+  const lastNudge = useRef(0);
   /**
    * The box open on the drawing: what it is editing, where, and what is typed.
    *

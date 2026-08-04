@@ -103,6 +103,12 @@ on all of it, rotation about the group's centre (positions orbit the pivot), and
 a draggable interior. `groupRot` lives in the component, not on the shapes: it
 belongs to the selection, and a new selection starts square.
 
+**One rule for "move this".** `translated()` is shared by the drag and the arrow
+keys, including the part that is easy to forget — a selected line travels, but
+only its free ends. The move drag works from a snapshot like rotate and scale:
+with snapping, an incremental delta re-applies the correction every frame and
+the selection creeps away from the pointer.
+
 **Nothing may end up unreachable.** The pointer is clamped to the box, so a shape
 outside it cannot be seen, clicked, marquee'd or deleted — but still exports and
 prints. `confineToBox()` runs on every surface change and reports what it moved.

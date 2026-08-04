@@ -547,6 +547,82 @@ export function hitTest(d: Diagram, p: Point, kitSize: (id: string) => Point): S
 }
 
 /**
+ * Moves the selection by a delta.
+ *
+ * Shared by the drag and the arrow keys so there is one rule for "move this",
+ * including the part that is easy to forget: a selected line travels too, but
+ * only its free ends, because an anchored end is already following its player.
+ */
+export function translated(
+  shapes: Shape[],
+  selected: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+  box: { w: number; h: number },
+): Shape[] {
+  const shift = (q: Point) => clampToBox({ x: q.x + dx, y: q.y + dy }, box);
+  return shapes.map((s) => {
+    if (!selected.has(s.id)) return s;
+    if (s.k === 'line') {
+      return {
+        ...s,
+        from: isRef(s.from) ? s.from : shift(s.from),
+        to: isRef(s.to) ? s.to : shift(s.to),
+        lastFrom: shift(s.lastFrom),
+        lastTo: shift(s.lastTo),
+      };
+    }
+    return { ...s, ...shift(s) };
+  });
+}
+
+/** How close two tokens have to come before a drag lines them up exactly. */
+export const SNAP = 7;
+
+/**
+ * Nudges a drag so tokens line up with the ones already on the pitch.
+ *
+ * A back four that should sit level is otherwise eyeballed, and eyeballed is
+ * what makes a diagram look approximate. Only centres are matched, and only
+ * against shapes that are not being dragged — aligning the selection to itself
+ * would mean it could never be moved off its own line.
+ */
+export function alignDelta(
+  shapes: Shape[],
+  selected: ReadonlySet<string>,
+  dx: number,
+  dy: number,
+): { dx: number; dy: number; guideX?: number; guideY?: number } {
+  const placed = (s: Shape): s is Exclude<Shape, LineShape> => s.k !== 'line';
+  const moving = shapes.filter((s) => selected.has(s.id) && placed(s)) as Exclude<Shape, LineShape>[];
+  const fixed = shapes.filter((s) => !selected.has(s.id) && placed(s)) as Exclude<Shape, LineShape>[];
+  if (moving.length === 0 || fixed.length === 0) return { dx, dy };
+
+  let bestX: { adjust: number; at: number } | undefined;
+  let bestY: { adjust: number; at: number } | undefined;
+  for (const m of moving) {
+    const x = m.x + dx;
+    const y = m.y + dy;
+    for (const f of fixed) {
+      const ax = f.x - x;
+      if (Math.abs(ax) <= SNAP && (!bestX || Math.abs(ax) < Math.abs(bestX.adjust))) {
+        bestX = { adjust: ax, at: f.x };
+      }
+      const ay = f.y - y;
+      if (Math.abs(ay) <= SNAP && (!bestY || Math.abs(ay) < Math.abs(bestY.adjust))) {
+        bestY = { adjust: ay, at: f.y };
+      }
+    }
+  }
+  return {
+    dx: dx + (bestX?.adjust ?? 0),
+    dy: dy + (bestY?.adjust ?? 0),
+    guideX: bestX?.at,
+    guideY: bestY?.at,
+  };
+}
+
+/**
  * Brings everything back inside the drawing box.
  *
  * Cropping to a smaller field used to strand whatever fell outside it: the
