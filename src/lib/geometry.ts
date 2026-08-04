@@ -230,6 +230,27 @@ export interface StrokeGeometry {
   points?: Point[];
 }
 
+/**
+ * A point on the surface, as a waypoint on the chord a→b.
+ *
+ * The inverse of `bendPoints`: `t` how far along, `o` how far across. Clamped
+ * off both ends so a dragged waypoint cannot land on top of an endpoint, where
+ * it would have no room to curve anything.
+ */
+export function bendAt(a: Point, b: Point, p: Point): Bend {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const vx = p.x - a.x;
+  const vy = p.y - a.y;
+  return {
+    t: clamp((vx * ux + vy * uy) / len, 0.05, 0.95),
+    o: vx * -uy + vy * ux,
+  };
+}
+
 /** Where a line's waypoints actually are, given where its ends are now. */
 export function bendPoints(a: Point, b: Point, bends: Bend[]): Point[] {
   const dx = b.x - a.x;

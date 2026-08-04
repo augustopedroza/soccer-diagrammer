@@ -3,7 +3,9 @@ import { equipmentSpec } from '../data/equipment';
 import { lineSpec } from '../data/notation';
 import { surfaceBox } from '../lib/surfaceBox';
 import {
+  bendAt,
   bendFor,
+  bendPoints,
   clamp,
   clampToBox,
   controlPoint,
@@ -47,6 +49,8 @@ interface Drag {
   /** For endpoint and bend drags: which line, and which end of it. */
   lineId?: string;
   end?: 'from' | 'to';
+  /** Which waypoint a bend drag has hold of. Absent means the midpoint. */
+  bendIndex?: number;
   /**
    * Rotate and scale work from the shapes as they were when the drag started,
    * not from the last frame. Applying each move to the previous result compounds
@@ -339,7 +343,25 @@ export function Canvas({
         setDrag({ mode: 'endpoint', start: p, now: p, shift: false, path: [p], lineId: l.id, end: 'to' });
         return;
       }
-      if (dist(p, mid) <= HANDLE_GRAB) {
+      // A drawn line's waypoints ARE its curvature handles; a plain one gets a
+      // midpoint that bows it. Either way the handle only ever changes shape.
+      if (l.bends && l.bends.length > 0) {
+        const at = bendPoints(a, b, l.bends);
+        for (let i = 0; i < at.length; i++) {
+          if (dist(p, at[i]) <= HANDLE_GRAB) {
+            setDrag({
+              mode: 'bend',
+              start: p,
+              now: p,
+              shift: false,
+              path: [p],
+              lineId: l.id,
+              bendIndex: i,
+            });
+            return;
+          }
+        }
+      } else if (dist(p, mid) <= HANDLE_GRAB) {
         setDrag({ mode: 'bend', start: p, now: p, shift: false, path: [p], lineId: l.id });
         return;
       }
@@ -468,11 +490,12 @@ export function Canvas({
           shapes: diagram.shapes.map((sh) => {
             if (sh.k !== 'line' || sh.id !== drag.lineId) return sh;
             const { a, b } = lineEnds(diagram, sh);
-            // Bowing from the midpoint replaces a drawn shape with one clean
-            // arc. Keeping the waypoints would leave the handle apparently
-            // doing nothing, since they are what describes the line.
-            const { bends: _drop, ...rest } = sh;
-            return { ...rest, bend: bendFor(a, b, p) };
+            if (drag.bendIndex === undefined) return { ...sh, bend: bendFor(a, b, p) };
+            // Waypoints stay in order along the chord. Drag one past its
+            // neighbour without sorting and the line folds back on itself, in a
+            // way dragging back does not undo.
+            const moved = (sh.bends ?? []).map((w, i) => (i === drag.bendIndex ? bendAt(a, b, p) : w));
+            return { ...sh, bends: [...moved].sort((x, y) => x.t - y.t) };
           }),
         },
         false,
@@ -808,11 +831,15 @@ export function Canvas({
         const { a, b } = lineEnds(diagram, l);
         const c = controlPoint(a, b, l.bend);
         const mid = pointOnCurve(a, c, b, 0.5);
+        const shapers =
+          l.bends && l.bends.length > 0 ? bendPoints(a, b, l.bends) : [mid];
         return (
           <g key={`h${l.id}`} className="handles">
             <circle cx={a.x} cy={a.y} r={7} className="handle" />
             <circle cx={b.x} cy={b.y} r={7} className="handle" />
-            <circle cx={mid.x} cy={mid.y} r={6} className="handle handleBend" />
+            {shapers.map((s, i) => (
+              <circle key={i} cx={s.x} cy={s.y} r={6} className="handle handleBend" />
+            ))}
           </g>
         );
       })}

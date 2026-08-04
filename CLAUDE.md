@@ -148,6 +148,13 @@ input: size-capped, shape-checked, every enum and id validated, unknown values
 dropped and counted, colours matched against literal hex because they go
 straight into an SVG attribute. Nothing is evaluated or rendered as markup.
 
+**A shaping handle only ever changes shape.** A drawn line's waypoints are its
+handles, one each; a plain line gets the midpoint, which bows it. The midpoint
+used to CLEAR the waypoints so it would not look dead on a drawn line — which
+made the one obvious gesture on a drawn stroke throw the drawing away. Dragged
+waypoints are re-sorted by `t` every frame: pass a neighbour without sorting and
+the line folds back on itself in a way dragging back does not undo.
+
 **A drawn stroke and a clean arc are different things.** `bend` is one
 perpendicular offset — a single quadratic — and stays exactly that; it is now
 reached only by dragging a selected line's midpoint handle, which clears `bends`

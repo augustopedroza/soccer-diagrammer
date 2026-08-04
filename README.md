@@ -54,8 +54,9 @@ session of one.
 - **Draw a line**: press where it starts, release where it ends. The arrow head
   lands where you release.
 - **Curve**: just draw it. The line keeps the shape your hand made, and anything
-  close to straight comes out straight. Drag a selected line's midpoint handle
-  to bow it into a single clean arc instead.
+  close to straight comes out straight.
+- **Reshape**: select a line and drag its handles. A drawn line has one at each
+  point it turns; a straight one has a midpoint that bows it into an arc.
 - **Attach**: release a line end over a player and it anchors there. Move that
   player and the line follows, changing length and angle with them.
 - **Select**: click, Shift-click to add, or drag a box on empty ground. Several

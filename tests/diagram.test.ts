@@ -14,6 +14,7 @@ import {
   PLAYER_RADIUS,
   TOKEN_GAP,
   alignDelta,
+  bendAt,
   bendFor,
   bendPoints,
   confineToBox,
@@ -287,6 +288,33 @@ describe('freehand', () => {
     if (!hostile.ok) return;
     expect(first(hostile).shapes).toHaveLength(1);
     expect((first(hostile).shapes[0] as { bends?: unknown }).bends).toBeUndefined();
+  });
+});
+
+describe('shaping a drawn line by its waypoints', () => {
+  const a = { x: 100, y: 100 };
+  const b = { x: 500, y: 100 };
+
+  it('reads a point on the surface back as a waypoint', () => {
+    // Halfway along, 60 across. The chord runs left to right, so "across" is up
+    // the screen in the negative direction.
+    const w = bendAt(a, b, { x: 300, y: 40 });
+    expect(w.t).toBeCloseTo(0.5, 6);
+    expect(Math.abs(w.o)).toBeCloseTo(60, 6);
+  });
+
+  it('round-trips: where a waypoint is drawn is where dragging it there puts it', () => {
+    const w = { t: 0.3, o: 45 };
+    const [where] = bendPoints(a, b, [w]);
+    const back = bendAt(a, b, where);
+    expect(back.t).toBeCloseTo(w.t, 6);
+    expect(back.o).toBeCloseTo(w.o, 6);
+  });
+
+  it('keeps a dragged waypoint off both ends', () => {
+    // On top of an endpoint it would have no room to curve anything.
+    expect(bendAt(a, b, { x: -400, y: 100 }).t).toBeCloseTo(0.05, 6);
+    expect(bendAt(a, b, { x: 900, y: 100 }).t).toBeCloseTo(0.95, 6);
   });
 });
 
