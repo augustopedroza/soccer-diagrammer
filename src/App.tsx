@@ -15,7 +15,7 @@ import {
 import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } from './data/notation';
 import { download, emptyDiagram, filename, parse, serialize } from './lib/file';
 import { confineToBox, wavyPath } from './lib/geometry';
-import { surfaceBox } from './lib/surfaceBox';
+import { CROP_FRACTION, surfaceBox } from './lib/surfaceBox';
 import { DEFAULT_SCALE, ROTATE_STEP, TEXT_SIZES, MAX_LABEL } from './types/diagram';
 import type { Crop, Diagram, Facing, LineType, Shape, Sport, SurfaceStyle, Team } from './types/diagram';
 
@@ -56,6 +56,26 @@ function Panel({
       </h2>
       {open && children}
     </section>
+  );
+}
+
+/**
+ * How much of the pitch a crop keeps, drawn rather than named.
+ *
+ * The one row in Surface where a picture beats a word: "¾" and "Box" describe an
+ * extent, and an extent is a thing to see. The others are settings you read back
+ * — Up/Down, Shaded/Line art — where a glyph would be guesswork.
+ */
+function CropIcon({ crop }: { crop: Crop }) {
+  const w = 20;
+  const h = 30;
+  const kept = h * CROP_FRACTION[crop];
+  return (
+    <svg viewBox={`-1 -1 ${w + 2} ${h + 2}`} width={17} height={25} aria-hidden="true">
+      <rect x={0} y={0} width={w} height={h} rx={2} className="cropWhole" />
+      <rect x={0} y={0} width={w} height={kept} rx={2} className="cropKept" />
+      <line x1={0} y1={h / 2} x2={w} y2={h / 2} className="cropWhole" />
+    </svg>
   );
 }
 
@@ -684,10 +704,13 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <div className="segmented">
+            <div className="segmented cropRow">
               {(['full', 'three-quarter', 'half', 'penalty-box'] as Crop[]).map((c) => (
                 <button key={c} aria-pressed={diagram.surface.crop === c} onClick={() => setSurface({ crop: c })}>
-                  {c === 'three-quarter' ? '¾' : c === 'penalty-box' ? 'Box' : c === 'full' ? 'Full' : 'Half'}
+                  <CropIcon crop={c} />
+                  <span>
+                    {c === 'three-quarter' ? '¾' : c === 'penalty-box' ? 'Box' : c === 'full' ? 'Full' : 'Half'}
+                  </span>
                 </button>
               ))}
             </div>
