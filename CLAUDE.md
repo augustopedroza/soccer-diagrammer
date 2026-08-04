@@ -122,6 +122,12 @@ outside its token and would otherwise read as empty grass and place a cone), and
 players deliberately do not intercept the line tool, since a line usually starts
 on one.
 
+**Every letter is a shortcut, so the typing guard has to be right.** `isTyping()`
+in `src/lib/keys.ts` decides it, and it is a named tested rule rather than a
+comparison inlined in the handler because it was wrong once: it checked only
+`INPUT`, and typing a note into the `TEXTAREA` armed the pass tool, retyped the
+selected line and renumbered a player on the way through.
+
 **The file shortcuts sit above the typing guard.** `⌘O`, `⌘S` and `⌘P` are
 handled before the `return` that ignores keys typed into an input: they should
 work while the title field has focus, and each has to be taken off the browser,

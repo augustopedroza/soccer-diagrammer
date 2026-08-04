@@ -16,6 +16,7 @@ import { ALL_NUMBERS, COLOR_PRESETS, LINE_SPECS, NUMBER_GROUPS, TEAM_SPECS } fro
 import { SHORTCUT_GROUPS } from './data/shortcuts';
 import { download, emptyDiagram, emptySession, filename, parse, serialize } from './lib/file';
 import { confineToBox, translated, wavyPath } from './lib/geometry';
+import { isTyping } from './lib/keys';
 import {
   addDiagram,
   clampIndex,
@@ -469,7 +470,7 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.tagName === 'INPUT';
+      const typing = isTyping(e.target);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         e.shiftKey ? redo() : undo();

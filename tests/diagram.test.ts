@@ -37,6 +37,7 @@ import {
 } from '../src/lib/session';
 import { ALL_NUMBERS, LINE_SPECS, bibRing } from '../src/data/notation';
 import { SHORTCUT_GROUPS } from '../src/data/shortcuts';
+import { isTyping } from '../src/lib/keys';
 import { EQUIPMENT } from '../src/data/equipment';
 import { FORMATIONS, MAX_SIDE, SMALL_SIDED, placements, smallSidedSpots } from '../src/data/formations';
 import { MAX_BENDS, MAX_DIAGRAMS, MAX_NOTES, type Diagram, type Session } from '../src/types/diagram';
@@ -1049,6 +1050,25 @@ describe('the printed sheet', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.session.diagrams[0].notes).toHaveLength(MAX_NOTES);
+  });
+});
+
+describe('typing versus shortcuts', () => {
+  it('treats every field a coach can type in as typing', () => {
+    // The notes field is a TEXTAREA, and a guard that only knew INPUT turned
+    // "pass into space" into arming the pass tool and renumbering a player.
+    for (const tag of ['INPUT', 'TEXTAREA', 'SELECT', 'textarea']) {
+      expect(isTyping({ tagName: tag } as unknown as EventTarget)).toBe(true);
+    }
+    expect(isTyping({ tagName: 'DIV', isContentEditable: true } as unknown as EventTarget)).toBe(true);
+  });
+
+  it('leaves the drawing alone, where the shortcuts belong', () => {
+    for (const tag of ['DIV', 'BODY', 'svg', 'circle']) {
+      expect(isTyping({ tagName: tag } as unknown as EventTarget)).toBe(false);
+    }
+    expect(isTyping(null)).toBe(false);
+    expect(isTyping({} as unknown as EventTarget)).toBe(false);
   });
 });
 
